@@ -180,3 +180,46 @@ test('готовое письмо из sendmail принимается вмес�
     assertContains('Из sendmail', (string) $row['subject']);
     assertContains('dest@example.com', (string) $row['envelope_to']);
 });
+
+test('отправленное письмо нельзя ни повторить, ни отменить', function (): void {
+    testTransport();
+
+    $service  = new MailService();
+    $messages = new MessageRepository();
+    $queue    = new Queue();
+
+    $result = $service->accept([
+        'to'      => 'done@example.com',
+        'subject' => 'Уже ушло',
+        'text'    => 'текст',
+        'sync'    => true,
+    ]);
+
+    assertSame(MessageRepository::SENT, (string) $messages->find((int) $result['id'])['status']);
+
+    // Повтор отправил бы получателю дубль, отмена соврала бы о судьбе письма
+    assertFalse($queue->retry((int) $result['id']), 'повтор отправленного письма недопустим');
+    assertFalse($queue->cancel((int) $result['id']), 'отмена отправленного письма недопустима');
+
+    assertSame(MessageRepository::SENT, (string) $messages->find((int) $result['id'])['status']);
+});
+
+test('повтор неудачного письма стирает прежнюю отметку об отправке', function (): void {
+    testTransport();
+
+    $messages = new MessageRepository();
+    $result   = (new MailService())->accept([
+        'to'      => 'retry@example.com',
+        'subject' => 'Повтор',
+        'text'    => 'текст',
+    ]);
+
+    $id = (int) $result['id'];
+    $messages->update($id, ['status' => MessageRepository::FAILED, 'sent_at' => '2026-01-01 10:00:00']);
+
+    assertTrue((new Queue())->retry($id));
+
+    $row = $messages->find($id);
+    assertSame(MessageRepository::QUEUED, (string) $row['status']);
+    assertTrue($row['sent_at'] === null, 'отметка об отправке должна быть очищена');
+});

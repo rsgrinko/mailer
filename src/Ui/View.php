@@ -33,18 +33,20 @@ final class View
      *
      * @param array<string, mixed> $data
      */
-    public static function partial(string $template, array $data = []): string
+    public static function partial(string $viewName, array $viewData = []): string
     {
-        $file = MAILER_ROOT . '/src/Ui/views/' . $template . '.php';
+        // Имена переменных с подчёркиванием, чтобы не столкнуться с данными страницы:
+        // на странице шаблонов есть своя переменная $template, и раньше она затиралась
+        $__file = MAILER_ROOT . '/src/Ui/views/' . $viewName . '.php';
 
-        if (!is_file($file)) {
-            throw new MailerException('Шаблон панели не найден: ' . $template);
+        if (!is_file($__file)) {
+            throw new MailerException('Шаблон панели не найден: ' . $viewName);
         }
 
-        extract($data, EXTR_SKIP);
+        extract($viewData, EXTR_OVERWRITE);
 
         ob_start();
-        include $file;
+        include $__file;
 
         return (string) ob_get_clean();
     }
@@ -84,6 +86,83 @@ final class View
         $_SESSION['flash'] = [];
 
         return is_array($flash) ? $flash : [];
+    }
+
+    /**
+     * Статус письма по-русски — в панели работает человек, а не машина.
+     */
+    public static function status(string $status): string
+    {
+        return match ($status) {
+            'queued'   => 'в очереди',
+            'sending'  => 'отправляется',
+            'sent'     => 'отправлено',
+            'failed'   => 'ошибка',
+            'canceled' => 'отменено',
+            default    => $status,
+        };
+    }
+
+    /**
+     * Статус доставки вебхука.
+     */
+    public static function webhookStatus(string $status): string
+    {
+        return match ($status) {
+            'queued'    => 'в очереди',
+            'delivered' => 'доставлен',
+            'failed'    => 'не доставлен',
+            default     => $status,
+        };
+    }
+
+    /**
+     * Откуда пришло письмо.
+     */
+    public static function source(string $source): string
+    {
+        return match ($source) {
+            'api'      => 'API',
+            'sendmail' => 'sendmail',
+            'smtpd'    => 'SMTP-релей',
+            'cli'      => 'командная строка',
+            'ui'       => 'панель',
+            default    => $source,
+        };
+    }
+
+    /**
+     * Событие в истории письма.
+     */
+    public static function event(string $type): string
+    {
+        return match ($type) {
+            'accepted' => 'принято',
+            'attempt'  => 'попытка',
+            'sent'     => 'отправлено',
+            'failed'   => 'ошибка',
+            'retry'    => 'повтор',
+            'canceled' => 'отменено',
+            'requeued' => 'возвращено в очередь',
+            'webhook'  => 'вебхук',
+            default    => $type,
+        };
+    }
+
+    /**
+     * Тип транспорта.
+     */
+    public static function transportType(string $type): string
+    {
+        return match ($type) {
+            'smtp'       => 'SMTP',
+            'sendmail'   => 'sendmail',
+            'log'        => 'запись в файлы',
+            'null'       => 'заглушка',
+            'failover'   => 'цепочка',
+            'roundrobin' => 'по кругу',
+            default      => $type,
+        };
     }
 
     /**

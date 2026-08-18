@@ -32,22 +32,34 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
 ?>
 <div class="row">
     <h1 style="margin:0"><?= View::e((string) $message['subject'] ?: '(без темы)') ?></h1>
-    <span class="badge <?= View::e($message['status']) ?>"><?= View::e($message['status']) ?></span>
+    <span class="badge <?= View::e($message['status']) ?>"><?= View::e(View::status((string) $message['status'])) ?></span>
     <div class="spacer"></div>
     <a class="btn" href="<?= View::e(View::url('/messages')) ?>">К списку</a>
 </div>
 
+<?php
+// Отправленное письмо трогать нельзя: повтор ушёл бы получателю дублем,
+// а отмена соврала бы о том, что письма не было
+$isSent     = (string) $message['status'] === 'sent';
+$isCanceled = (string) $message['status'] === 'canceled';
+?>
 <div class="card" style="margin-top:16px">
     <div class="row">
-        <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/send')) ?>">
-            <button class="primary" type="submit">Отправить сейчас</button>
-        </form>
-        <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/retry')) ?>">
-            <button type="submit">Вернуть в очередь</button>
-        </form>
-        <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/cancel')) ?>">
-            <button type="submit">Отменить</button>
-        </form>
+        <?php if (!$isSent): ?>
+            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/send')) ?>">
+                <button class="primary" type="submit">Отправить сейчас</button>
+            </form>
+            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/retry')) ?>">
+                <button type="submit">Вернуть в очередь</button>
+            </form>
+        <?php endif; ?>
+
+        <?php if (!$isSent && !$isCanceled): ?>
+            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/cancel')) ?>">
+                <button type="submit">Отменить</button>
+            </form>
+        <?php endif; ?>
+
         <a class="btn" href="<?= View::e(View::url('/compose', ['copy' => $id])) ?>">Написать похожее</a>
         <a class="btn" href="<?= View::e(View::url('/messages/' . $id . '/raw')) ?>">Скачать .eml</a>
         <div class="spacer"></div>
@@ -67,7 +79,7 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
             <?php if ($cc !== []): ?><dt>Копия</dt><dd><?= View::e($addresses($cc)) ?></dd><?php endif; ?>
             <?php if ($bcc !== []): ?><dt>Скрытая копия</dt><dd><?= View::e($addresses($bcc)) ?></dd><?php endif; ?>
             <?php if (($message['reply_to'] ?? null) !== null): ?><dt>Ответ на</dt><dd><?= View::e((string) $message['reply_to']) ?></dd><?php endif; ?>
-            <dt>Источник</dt><dd><?= View::e((string) $message['source']) ?></dd>
+            <dt>Источник</dt><dd><?= View::e(View::source((string) $message['source'])) ?></dd>
             <dt>Проект</dt>
             <dd>
                 <?php if ($project !== null): ?>
@@ -117,7 +129,7 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
                 <?php foreach ($events as $event): ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::date((string) $event['created_at'])) ?></td>
-                        <td class="nowrap"><?= View::e((string) $event['type']) ?></td>
+                        <td class="nowrap"><?= View::e(View::event((string) $event['type'])) ?></td>
                         <td class="small"><?= View::e((string) $event['message']) ?>
                             <?php if (!empty($event['meta'])): ?>
                                 <details>
@@ -194,7 +206,7 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
             <?php foreach ($webhooks as $hook): ?>
                 <tr>
                     <td><?= View::e((string) $hook['event']) ?></td>
-                    <td><span class="badge <?= View::e((string) $hook['status']) ?>"><?= View::e((string) $hook['status']) ?></span></td>
+                    <td><span class="badge <?= View::e((string) $hook['status']) ?>"><?= View::e(View::webhookStatus((string) $hook['status'])) ?></span></td>
                     <td class="small mono"><?= View::e(Str::limit((string) $hook['url'], 50)) ?></td>
                     <td class="small"><?= (int) $hook['attempts'] ?></td>
                     <td class="small"><?= View::e((string) ($hook['response_code'] ?? '—')) ?></td>

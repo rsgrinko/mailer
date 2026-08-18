@@ -202,12 +202,20 @@ final class Queue
             return false;
         }
 
+        // Отправленное письмо повторять нельзя: получатель получит дубль.
+        // Если нужно такое же письмо — делается копия, а это письмо остаётся как есть.
+        if ((string) $row['status'] === MessageRepository::SENT) {
+            return false;
+        }
+
         $this->messages->update($id, [
             'status'       => MessageRepository::QUEUED,
             'available_at' => Database::now(),
             'locked_by'    => null,
             'locked_at'    => null,
             'last_error'   => null,
+            // Письмо снова ждёт отправки — прежняя отметка об отправке уже не про него
+            'sent_at'      => null,
             // Даём письму ещё попыток, иначе оно снова упрётся в лимит
             'max_attempts' => max(
                 (int) $row['max_attempts'],

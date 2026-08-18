@@ -184,6 +184,23 @@ $menu = [
             cursor: pointer;
         }
 
+        /* Всё, по чему можно щёлкнуть, должно об этом говорить курсором */
+        a,
+        select,
+        summary,
+        input[type=checkbox],
+        input[type=radio],
+        input[type=submit],
+        input[type=file],
+        label.inline,
+        label.inline > span,
+        .pagination a,
+        .chart .bar {
+            cursor: pointer;
+        }
+
+        button:disabled, .btn:disabled { cursor: not-allowed; opacity: .6; }
+
         button:hover, .btn:hover { border-color: var(--accent); text-decoration: none; }
         button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
         button.danger, .btn.danger { color: var(--err); }

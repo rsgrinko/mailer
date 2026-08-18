@@ -46,7 +46,7 @@ $isNew = $project === null;
                     <option value="">использовать основной</option>
                     <?php foreach ($transports as $transport): ?>
                         <option value="<?= (int) $transport['id'] ?>" <?= (int) ($project['transport_id'] ?? 0) === (int) $transport['id'] ? 'selected' : '' ?>>
-                            <?= View::e($transport['name']) ?> (<?= View::e($transport['type']) ?>)
+                            <?= View::e($transport['name']) ?> (<?= View::e(View::transportType((string) $transport['type'])) ?>)
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -133,7 +133,7 @@ $isNew = $project === null;
                 <?php foreach ($recent as $row): ?>
                     <tr>
                         <td class="small nowrap"><?= View::e(View::date((string) $row['created_at'])) ?></td>
-                        <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e($row['status']) ?></span></td>
+                        <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span></td>
                         <td><?= View::e(Str::limit((string) $row['subject'], 50)) ?></td>
                         <td><a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a></td>
                     </tr>

@@ -85,9 +85,9 @@ foreach ($daily as $day) {
         <table>
             <?php foreach ($stats['by_status'] as $status => $count): ?>
                 <tr>
-                    <td><span class="badge <?= View::e($status) ?>"><?= View::e($status) ?></span></td>
+                    <td><span class="badge <?= View::e($status) ?>"><?= View::e(View::status((string) $status)) ?></span></td>
                     <td><?= (int) $count ?></td>
-                    <td class="row end">
+                    <td style="text-align:right">
                         <a href="<?= View::e(View::url('/messages', ['status' => $status])) ?>">показать</a>
                     </td>
                 </tr>
@@ -98,7 +98,7 @@ foreach ($daily as $day) {
         <table>
             <?php foreach ($webhooks as $status => $count): ?>
                 <tr>
-                    <td><span class="badge <?= View::e($status) ?>"><?= View::e($status) ?></span></td>
+                    <td><span class="badge <?= View::e($status) ?>"><?= View::e(View::webhookStatus((string) $status)) ?></span></td>
                     <td><?= (int) $count ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -135,7 +135,7 @@ foreach ($daily as $day) {
                 <?php foreach ($recent as $row): ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::ago((string) $row['created_at'])) ?></td>
-                        <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e($row['status']) ?></span></td>
+                        <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span></td>
                         <td><?= View::e(Str::limit((string) $row['subject'], 40)) ?></td>
                         <td><a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a></td>
                     </tr>
@@ -151,7 +151,7 @@ foreach ($daily as $day) {
                 <?php foreach ($events as $event): ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::ago((string) $event['created_at'])) ?></td>
-                        <td class="nowrap"><?= View::e($event['type']) ?></td>
+                        <td class="nowrap"><?= View::e(View::event((string) $event['type'])) ?></td>
                         <td class="small"><?= View::e(Str::limit((string) $event['message'], 70)) ?></td>
                         <td><?php if ($event['message_id'] !== null): ?><a href="<?= View::e(View::url('/messages/' . $event['message_id'])) ?>">письмо</a><?php endif; ?></td>
                     </tr>
@@ -169,7 +169,7 @@ foreach ($daily as $day) {
             <?php foreach ($transports as $transport): ?>
                 <tr>
                     <td><a href="<?= View::e(View::url('/transports/' . $transport['id'])) ?>"><?= View::e($transport['name']) ?></a></td>
-                    <td><?= View::e($transport['type']) ?></td>
+                    <td><?= View::e(View::transportType((string) $transport['type'])) ?></td>
                     <td>
                         <?php if ((int) $transport['is_default'] === 1): ?><span class="badge sent">основной</span><?php endif; ?>
                         <?php if ((int) $transport['active'] !== 1): ?><span class="badge muted">выключен</span><?php endif; ?>

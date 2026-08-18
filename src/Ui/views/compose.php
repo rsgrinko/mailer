@@ -62,7 +62,7 @@ $value = static fn (string $key): string => View::e($prefill[$key] ?? '');
                     <option value="">по умолчанию</option>
                     <?php foreach ($transports as $transport): ?>
                         <option value="<?= (int) $transport['id'] ?>" <?= ($prefill['transport'] ?? '') === (string) $transport['id'] ? 'selected' : '' ?>>
-                            <?= View::e($transport['name']) ?> (<?= View::e($transport['type']) ?>)<?= (int) $transport['is_default'] === 1 ? ' — основной' : '' ?>
+                            <?= View::e($transport['name']) ?> (<?= View::e(View::transportType((string) $transport['type'])) ?>)<?= (int) $transport['is_default'] === 1 ? ' — основной' : '' ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

@@ -148,17 +148,22 @@ final class MessagesController
 
         switch ($action) {
             case 'retry':
-                $this->queue->retry($id, 'Повтор из панели');
-                View::flash('Письмо возвращено в очередь');
+                if ($this->queue->retry($id, 'Повтор из панели')) {
+                    View::flash('Письмо возвращено в очередь');
+                } else {
+                    View::flash(
+                        'Повторить нельзя: письмо уже отправлено. Чтобы отправить такое же — нажмите «Написать похожее».',
+                        'error'
+                    );
+                }
                 break;
 
             case 'cancel':
-                View::flash(
-                    $this->queue->cancel($id, 'Отмена из панели')
-                        ? 'Письмо отменено'
-                        : 'Отменить нельзя: письмо уже отправлено',
-                    'ok'
-                );
+                if ($this->queue->cancel($id, 'Отмена из панели')) {
+                    View::flash('Письмо отменено');
+                } else {
+                    View::flash('Отменить нельзя: письмо уже отправлено или отменено', 'error');
+                }
                 break;
 
             case 'send':
@@ -198,11 +203,9 @@ final class MessagesController
             $id = (int) $row['id'];
 
             if ($action === 'retry') {
-                $this->queue->retry($id, 'Массовый повтор из панели');
-                $count++;
+                $count += $this->queue->retry($id, 'Массовый повтор из панели') ? 1 : 0;
             } elseif ($action === 'cancel') {
-                $this->queue->cancel($id, 'Массовая отмена из панели');
-                $count++;
+                $count += $this->queue->cancel($id, 'Массовая отмена из панели') ? 1 : 0;
             } elseif ($action === 'delete') {
                 $this->messages->delete($id);
                 $count++;

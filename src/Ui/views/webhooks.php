@@ -67,7 +67,7 @@ use Mailer\Ui\View;
                 <tr>
                     <td class="small nowrap"><?= View::e(View::date((string) $item['created_at'])) ?></td>
                     <td><?= View::e((string) $item['event']) ?></td>
-                    <td><span class="badge <?= View::e((string) $item['status']) ?>"><?= View::e((string) $item['status']) ?></span></td>
+                    <td><span class="badge <?= View::e((string) $item['status']) ?>"><?= View::e(View::webhookStatus((string) $item['status'])) ?></span></td>
                     <td class="small mono"><?= View::e(Str::limit((string) $item['url'], 45)) ?></td>
                     <td class="small"><?= (int) $item['attempts'] ?></td>
                     <td class="small"><?= View::e((string) ($item['response_code'] ?? '—')) ?></td>

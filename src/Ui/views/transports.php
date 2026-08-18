@@ -47,7 +47,7 @@ use Mailer\Ui\View;
                         <a href="<?= View::e(View::url('/transports/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
                         <?php if ((int) $item['is_default'] === 1): ?><span class="badge sent">основной</span><?php endif; ?>
                     </td>
-                    <td><?= View::e($item['type']) ?></td>
+                    <td><?= View::e(View::transportType((string) $item['type'])) ?></td>
                     <td class="small mono"><?= View::e(Str::limit($target, 50)) ?></td>
                     <td class="small"><?= View::e((string) ($item['from_email'] ?? '—')) ?></td>
                     <td class="small">

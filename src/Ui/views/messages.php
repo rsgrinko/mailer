@@ -119,7 +119,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                         <span class="muted"><?= View::e(View::ago((string) $row['created_at'])) ?></span>
                     </td>
                     <td>
-                        <span class="badge <?= View::e($row['status']) ?>"><?= View::e($row['status']) ?></span>
+                        <span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span>
                         <?php if (($row['last_error'] ?? null) !== null && $row['status'] !== 'sent'): ?>
                             <div class="small muted" title="<?= View::e((string) $row['last_error']) ?>">
                                 <?= View::e(Str::limit((string) $row['last_error'], 40)) ?>
@@ -136,7 +136,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                     <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
                     <td class="small">
                         <?= View::e((string) ($row['transport_used'] ?? '—')) ?><br>
-                        <span class="muted"><?= View::e($sources[(string) $row['source']] ?? (string) $row['source']) ?></span>
+                        <span class="muted"><?= View::e(View::source((string) $row['source'])) ?></span>
                     </td>
                     <td class="small"><?= (int) $row['attempts'] ?> / <?= (int) $row['max_attempts'] ?></td>
                     <td class="small nowrap"><?= View::e(Str::bytes((int) $row['size'])) ?></td>

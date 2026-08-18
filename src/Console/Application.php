@@ -619,8 +619,7 @@ final class Application
             $page  = $messages->paginate(['status' => MessageRepository::FAILED], 1, 200);
 
             foreach ($page['items'] as $row) {
-                $queue->retry((int) $row['id'], 'Массовый повтор из CLI');
-                $count++;
+                $count += $queue->retry((int) $row['id'], 'Массовый повтор из CLI') ? 1 : 0;
             }
 
             $this->line('Возвращено в очередь писем: ' . $count);
@@ -637,7 +636,12 @@ final class Application
             return 1;
         }
 
-        $queue->retry((int) $row['id'], 'Повтор из CLI');
+        if (!$queue->retry((int) $row['id'], 'Повтор из CLI')) {
+            $this->line('Повторить нельзя: письмо уже отправлено.');
+
+            return 1;
+        }
+
         $this->line('Письмо ' . $row['uuid'] . ' снова в очереди.');
 
         return 0;
