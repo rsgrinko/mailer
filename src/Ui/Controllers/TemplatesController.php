@@ -1,0 +1,129 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Mailer\Ui\Controllers;
+
+use Mailer\Http\Request;
+use Mailer\Http\Response;
+use Mailer\Repository\TemplateRepository;
+use Mailer\Template\Renderer;
+use Mailer\Ui\View;
+use Throwable;
+
+/**
+ * Шаблоны писем: список, правка и предпросмотр с подстановкой переменных.
+ */
+final class TemplatesController
+{
+    private TemplateRepository $templates;
+    private Renderer $renderer;
+
+    public function __construct()
+    {
+        $this->templates = new TemplateRepository();
+        $this->renderer  = new Renderer();
+    }
+
+    public function index(Request $request): Response
+    {
+        $items = $this->templates->all();
+
+        foreach ($items as $index => $item) {
+            $items[$index]['variables'] = $this->renderer->variables(
+                (string) ($item['subject'] ?? ''),
+                (string) ($item['html'] ?? ''),
+                (string) ($item['text'] ?? '')
+            );
+        }
+
+        return Response::html(View::render('templates', [
+            'active' => 'templates',
+            'items'  => $items,
+        ], 'Шаблоны'));
+    }
+
+    public function form(Request $request, ?int $id): Response
+    {
+        $template = $id !== null ? $this->templates->find($id) : null;
+
+        if ($id !== null && $template === null) {
+            View::flash('Шаблон не найден', 'error');
+
+            return Response::redirect(View::url('/templates'));
+        }
+
+        $variables = $template === null ? [] : $this->renderer->variables(
+            (string) ($template['subject'] ?? ''),
+            (string) ($template['html'] ?? ''),
+            (string) ($template['text'] ?? '')
+        );
+
+        // Предпросмотр: подставляем в шаблон присланные данные
+        $preview = null;
+        $sample  = (string) $request->query('sample', '');
+        if ($template !== null && $sample !== '') {
+            $data    = json_decode($sample, true);
+            $preview = $this->renderer->renderTemplate($template, is_array($data) ? $data : []);
+        }
+
+        return Response::html(View::render('template_form', [
+            'active'    => 'templates',
+            'template'  => $template,
+            'variables' => $variables,
+            'preview'   => $preview,
+            'sample'    => $sample,
+        ], $template === null ? 'Новый шаблон' : 'Шаблон «' . $template['name'] . '»'));
+    }
+
+    public function save(Request $request): Response
+    {
+        $id = (int) $request->input('id', 0);
+
+        $data = [
+            'name'        => trim((string) $request->input('name', '')),
+            'description' => trim((string) $request->input('description', '')),
+            'subject'     => (string) $request->input('subject', ''),
+            'html'        => (string) $request->input('html', ''),
+            'text'        => (string) $request->input('text', ''),
+        ];
+
+        try {
+            if ($id > 0) {
+                $this->templates->update($id, $data);
+                View::flash('Шаблон сохранён');
+            } else {
+                $id = $this->templates->create($data);
+                View::flash('Шаблон создан');
+            }
+        } catch (Throwable $e) {
+            View::flash('Не сохранилось: ' . $e->getMessage(), 'error');
+
+            return Response::redirect(View::url($id > 0 ? '/templates/' . $id : '/templates/new'));
+        }
+
+        return Response::redirect(View::url('/templates/' . $id));
+    }
+
+    public function action(Request $request, int $id, string $action): Response
+    {
+        $template = $this->templates->find($id);
+
+        if ($template === null) {
+            View::flash('Шаблон не найден', 'error');
+
+            return Response::redirect(View::url('/templates'));
+        }
+
+        if ($action === 'delete') {
+            $this->templates->delete($id);
+            View::flash('Шаблон удалён');
+
+            return Response::redirect(View::url('/templates'));
+        }
+
+        View::flash('Неизвестное действие: ' . $action, 'error');
+
+        return Response::redirect(View::url('/templates/' . $id));
+    }
+}

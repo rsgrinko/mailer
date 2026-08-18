@@ -1,0 +1,28 @@
+# Воркер очереди писем.
+#
+#   cp deploy/mailer-worker.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now mailer-worker
+
+[Unit]
+Description=Воркер очереди писем
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/mailer
+ExecStart=/usr/bin/php /var/www/mailer/bin/mailer worker
+Restart=always
+RestartSec=5
+
+# Воркер завершает текущую пачку писем и выходит сам
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+StandardOutput=append:/var/www/mailer/var/log/worker.log
+StandardError=append:/var/www/mailer/var/log/worker.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+/.env
+/var/*
+!/var/.gitkeep
+/.idea
+*.sqlite
+*.sqlite-journal
+*.log

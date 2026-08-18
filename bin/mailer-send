@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+#
+# Отправка письма через HTTP API сервиса. Нужен только curl —
+# подходит для cron, CI и любых приложений, которым не подключить SDK.
+#
+# Примеры:
+#   mailer-send --to user@example.com --subject "Отчёт" --text "Готово"
+#   echo "Текст письма" | mailer-send --to user@example.com --subject "Из конвейера"
+#   mailer-send --to user@example.com --subject "С файлом" --text "См. вложение" --attach /tmp/report.pdf
+#
+# Настройки берутся из переменных окружения или из ключей:
+#   MAILER_API  адрес API (по умолчанию http://127.0.0.1:8080)
+#   MAILER_KEY  API-ключ проекта
+
+set -euo pipefail
+
+API="${MAILER_API:-http://127.0.0.1:8080}"
+KEY="${MAILER_KEY:-}"
+TO=""
+CC=""
+SUBJECT=""
+TEXT=""
+HTML=""
+FROM=""
+TAG=""
+TRANSPORT=""
+SYNC="false"
+ATTACHMENTS=()
+
+usage() {
+    cat <<'USAGE'
+Отправка письма через сервис рассылки.
+
+  --to адрес[,адрес]      получатели (обязательно)
+  --cc адрес[,адрес]      копии
+  --subject "тема"        тема письма
+  --text "текст"          текстовая часть (если не задана — читаем stdin)
+  --html "html"           HTML-часть; можно указать путь к файлу
+  --from адрес            отправитель
+  --tag метка             метка для поиска в панели
+  --transport имя         отправить конкретным транспортом
+  --attach путь           вложение (ключ можно повторять)
+  --sync                  дождаться отправки, а не просто поставить в очередь
+  --api адрес             адрес API (по умолчанию $MAILER_API)
+  --key ключ              API-ключ (по умолчанию $MAILER_KEY)
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --to)        TO="$2"; shift 2 ;;
+        --cc)        CC="$2"; shift 2 ;;
+        --subject)   SUBJECT="$2"; shift 2 ;;
+        --text)      TEXT="$2"; shift 2 ;;
+        --html)      HTML="$2"; shift 2 ;;
+        --from)      FROM="$2"; shift 2 ;;
+        --tag)       TAG="$2"; shift 2 ;;
+        --transport) TRANSPORT="$2"; shift 2 ;;
+        --attach)    ATTACHMENTS+=("$2"); shift 2 ;;
+        --sync)      SYNC="true"; shift ;;
+        --api)       API="$2"; shift 2 ;;
+        --key)       KEY="$2"; shift 2 ;;
+        -h|--help)   usage; exit 0 ;;
+        *)           echo "Неизвестный ключ: $1" >&2; usage; exit 64 ;;
+    esac
+done
+
+if [ -z "$TO" ]; then
+    echo "Не указан получатель (--to)" >&2
+    exit 64
+fi
+
+if [ -z "$KEY" ]; then
+    echo "Не задан API-ключ: укажите --key или переменную MAILER_KEY" >&2
+    exit 64
+fi
+
+# Текст письма можно передать через конвейер
+if [ -z "$TEXT" ] && [ ! -t 0 ]; then
+    TEXT="$(cat)"
+fi
+
+# HTML можно передать файлом
+if [ -n "$HTML" ] && [ -f "$HTML" ]; then
+    HTML="$(cat "$HTML")"
+fi
+
+# Экранирование строки для JSON: спецсимволы и переводы строк
+json_escape() {
+    printf '%s' "$1" | LC_ALL=C awk '
+        BEGIN { ORS = "" }
+        {
+            gsub(/\\/, "\\\\")
+            gsub(/"/, "\\\"")
+            gsub(/\r/, "\\r")
+            gsub(/\t/, "\\t")
+            if (NR > 1) print "\\n"
+            print
+        }
+    '
+}
+
+# Список адресов "a@b, c@d" -> ["a@b","c@d"]
+json_list() {
+    local result="" item
+    local IFS=','
+    for item in $1; do
+        item="$(printf '%s' "$item" | sed 's/^ *//; s/ *$//')"
+        [ -z "$item" ] && continue
+        if [ -n "$result" ]; then result="$result,"; fi
+        result="$result\"$(json_escape "$item")\""
+    done
+    printf '[%s]' "$result"
+}
+
+BODY="{\"to\":$(json_list "$TO")"
+[ -n "$CC" ]        && BODY="$BODY,\"cc\":$(json_list "$CC")"
+BODY="$BODY,\"subject\":\"$(json_escape "$SUBJECT")\""
+[ -n "$TEXT" ]      && BODY="$BODY,\"text\":\"$(json_escape "$TEXT")\""
+[ -n "$HTML" ]      && BODY="$BODY,\"html\":\"$(json_escape "$HTML")\""
+[ -n "$FROM" ]      && BODY="$BODY,\"from\":\"$(json_escape "$FROM")\""
+[ -n "$TAG" ]       && BODY="$BODY,\"tag\":\"$(json_escape "$TAG")\""
+[ -n "$TRANSPORT" ] && BODY="$BODY,\"transport\":\"$(json_escape "$TRANSPORT")\""
+BODY="$BODY,\"sync\":$SYNC"
+
+if [ ${#ATTACHMENTS[@]} -gt 0 ]; then
+    FILES=""
+    for path in "${ATTACHMENTS[@]}"; do
+        if [ ! -f "$path" ]; then
+            echo "Файл не найден: $path" >&2
+            exit 66
+        fi
+        NAME="$(basename "$path")"
+        CONTENT="$(base64 < "$path" | tr -d '\n')"
+        if [ -n "$FILES" ]; then FILES="$FILES,"; fi
+        FILES="$FILES{\"name\":\"$(json_escape "$NAME")\",\"content\":\"$CONTENT\"}"
+    done
+    BODY="$BODY,\"attachments\":[$FILES]"
+fi
+
+BODY="$BODY}"
+
+RESPONSE="$(printf '%s' "$BODY" | curl -sS -X POST "$API/api/v1/messages" \
+    -H "Authorization: Bearer $KEY" \
+    -H "Content-Type: application/json" \
+    --data-binary @- \
+    -w '\n%{http_code}')"
+
+CODE="$(printf '%s' "$RESPONSE" | tail -n1)"
+JSON="$(printf '%s' "$RESPONSE" | sed '$d')"
+
+printf '%s\n' "$JSON"
+
+if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then
+    exit 0
+fi
+
+echo "Сервис ответил кодом $CODE" >&2
+exit 1

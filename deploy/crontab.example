@@ -1,0 +1,11 @@
+# Если systemd недоступен, воркер можно гонять по расписанию.
+# Строки добавляются в /etc/cron.d/mailer
+
+# Раз в минуту разбираем очередь
+* * * * * www-data cd /var/www/mailer && php bin/mailer worker --once >> var/log/cron.log 2>&1
+
+# Раз в сутки чистим старые отправленные письма
+30 4 * * * www-data cd /var/www/mailer && php bin/mailer queue:purge --status=sent --days=30 >> var/log/cron.log 2>&1
+
+# Раз в неделю убираем старые неудачные
+30 5 * * 0 www-data cd /var/www/mailer && php bin/mailer queue:purge --status=failed --days=90 >> var/log/cron.log 2>&1

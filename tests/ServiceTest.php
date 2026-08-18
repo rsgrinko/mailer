@@ -1,0 +1,227 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Тесты вспомогательных частей: шаблоны, роутер, ключи, шифрование, DKIM, транспорты.
+ */
+
+use Mailer\Dkim\Signer;
+use Mailer\Http\Request;
+use Mailer\Http\Response;
+use Mailer\Http\Router;
+use Mailer\Message\Address;
+use Mailer\Message\Message;
+use Mailer\Security\ApiKey;
+use Mailer\Security\Crypto;
+use Mailer\Repository\ProjectRepository;
+use Mailer\Repository\TemplateRepository;
+use Mailer\Support\Config;
+use Mailer\Template\Renderer;
+use Mailer\Transport\BaseTransport;
+use Mailer\Transport\FailoverTransport;
+use Mailer\Transport\NullTransport;
+use Mailer\Transport\TransportException;
+use Mailer\Transport\TransportInterface;
+
+test('шаблон подставляет переменные и экранирует HTML', function (): void {
+    $renderer = new Renderer();
+
+    $result = $renderer->render('Привет, {{ name }}!', ['name' => '<b>Иван</b>']);
+    assertSame('Привет, &lt;b&gt;Иван&lt;/b&gt;!', $result);
+
+    $raw = $renderer->render('{{{ name }}}', ['name' => '<b>Иван</b>']);
+    assertSame('<b>Иван</b>', $raw);
+});
+
+test('шаблон умеет вложенные значения', function (): void {
+    $result = (new Renderer())->render('{{ user.email }}', ['user' => ['email' => 'a@example.com']], false);
+
+    assertSame('a@example.com', $result);
+});
+
+test('переменные шаблона собираются списком', function (): void {
+    $variables = (new Renderer())->variables('{{ name }}', '<p>{{ site }}</p>', '{{{ footer }}}');
+
+    assertTrue(in_array('name', $variables, true));
+    assertTrue(in_array('site', $variables, true));
+    assertTrue(in_array('footer', $variables, true));
+});
+
+test('письмо по шаблону берёт тему и тело из базы', function (): void {
+    $templates = new TemplateRepository();
+
+    if ($templates->findByName('тест-шаблон') === null) {
+        $templates->create([
+            'name'    => 'тест-шаблон',
+            'subject' => 'Здравствуйте, {{ name }}',
+            'html'    => '<p>Ваш код: {{ code }}</p>',
+            'text'    => 'Ваш код: {{ code }}',
+        ]);
+    }
+
+    $built = (new Mailer\Message\MessageFactory())->build([
+        'to'            => 'user@example.com',
+        'template'      => 'тест-шаблон',
+        'template_data' => ['name' => 'Иван', 'code' => '1234'],
+    ]);
+
+    assertSame('Здравствуйте, Иван', $built['message']->subject);
+    assertContains('1234', $built['message']->html);
+});
+
+test('роутер разбирает параметры пути', function (): void {
+    $router = new Router();
+    $router->get('/api/v1/messages/{id}', static fn (Request $r, array $p): Response => Response::json(['id' => $p['id']]));
+
+    $request         = new Request();
+    $request->method = 'GET';
+    $request->path   = '/api/v1/messages/abc-123';
+    $request->query  = [];
+    $request->headers = [];
+    $request->rawBody = '';
+    $request->body    = [];
+
+    $response = $router->dispatch($request);
+
+    assertSame(200, $response->status());
+    assertContains('abc-123', $response->body());
+});
+
+test('роутер отвечает 404 и 405', function (): void {
+    $router = new Router();
+    $router->get('/api/v1/health', static fn (Request $r, array $p): Response => Response::json(['ok' => true]));
+
+    $request          = new Request();
+    $request->method  = 'GET';
+    $request->path    = '/нет-такого';
+    $request->query   = [];
+    $request->headers = [];
+    $request->rawBody = '';
+    $request->body    = [];
+
+    assertSame(404, $router->dispatch($request)->status());
+
+    $request->method = 'POST';
+    $request->path   = '/api/v1/health';
+
+    assertSame(405, $router->dispatch($request)->status());
+});
+
+test('API-ключ проверяется по хешу', function (): void {
+    $key = ApiKey::generate();
+
+    assertTrue(ApiKey::matches($key['key'], $key['hash']));
+    assertFalse(ApiKey::matches('mlr_чужой_ключ', $key['hash']));
+    assertSame($key['prefix'], ApiKey::prefix($key['key']));
+});
+
+test('проект находится по своему ключу', function (): void {
+    $projects = new ProjectRepository();
+    $created  = $projects->create(['name' => 'проект-для-ключа']);
+
+    $found = $projects->findByApiKey($created['key']);
+
+    assertTrue($found !== null);
+    assertSame('проект-для-ключа', (string) $found['name']);
+    assertTrue($projects->findByApiKey('mlr_abcdefgh_нетакого') === null);
+});
+
+test('шифрование настроек возвращает исходное значение', function (): void {
+    Config::set('app.key', Crypto::generateKey());
+
+    $encrypted = Crypto::encrypt('секретный-пароль');
+
+    assertNotContains('секретный-пароль', $encrypted);
+    assertSame('секретный-пароль', Crypto::decrypt($encrypted));
+});
+
+test('DKIM-подпись добавляется в письмо', function (): void {
+    // На Windows без openssl.cnf ключ не создать — там тест пропускаем
+    $pair = @openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+    if ($pair === false) {
+        while (openssl_error_string() !== false) {
+            // вычищаем очередь ошибок openssl, чтобы они не всплыли в следующем тесте
+        }
+
+        skipTest('openssl не может создать ключ в этом окружении (нет openssl.cnf)');
+    }
+
+    openssl_pkey_export($pair, $privateKey);
+
+    $mime = "From: sender@example.com\r\nTo: user@example.com\r\nSubject: тема\r\n"
+        . "Date: " . date('r') . "\r\nMIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n\r\nтело письма\r\n";
+
+    $signed = (new Signer('example.com', 'mail', $privateKey))->sign($mime);
+
+    assertContains('DKIM-Signature:', $signed);
+    assertContains('d=example.com', $signed);
+    assertContains('s=mail', $signed);
+    assertContains('bh=', $signed);
+});
+
+test('заглушка отправки не падает', function (): void {
+    $message = new Message();
+    $message->from = new Address('from@example.com');
+    $message->addTo('to@example.com');
+    $message->subject = 'Тест';
+    $message->text    = 'текст';
+
+    $result = (new NullTransport('заглушка', []))->send($message);
+
+    assertContains('отброшено', $result);
+});
+
+test('цепочка транспортов переходит к следующему после ошибки', function (): void {
+    $broken = new class ('сломанный', []) extends BaseTransport {
+        public function type(): string
+        {
+            return 'test';
+        }
+
+        public function send(Message $message): string
+        {
+            throw TransportException::temporary('сервер недоступен');
+        }
+    };
+
+    $chain = new FailoverTransport('цепочка', [], [$broken, new NullTransport('рабочий', [])]);
+
+    $message = new Message();
+    $message->from = new Address('from@example.com');
+    $message->addTo('to@example.com');
+    $message->subject = 'Через цепочку';
+    $message->text    = 'текст';
+
+    $result = $chain->send($message);
+
+    assertContains('рабочий', $result);
+});
+
+test('если все транспорты цепочки упали, ошибка остаётся временной', function (): void {
+    $broken = new class ('сломанный', []) extends BaseTransport {
+        public function type(): string
+        {
+            return 'test';
+        }
+
+        public function send(Message $message): string
+        {
+            throw TransportException::temporary('сервер недоступен');
+        }
+    };
+
+    $chain = new FailoverTransport('цепочка-2', [], [$broken]);
+
+    $message = new Message();
+    $message->from = new Address('from@example.com');
+    $message->addTo('to@example.com');
+    $message->subject = 'Ошибка';
+    $message->text    = 'текст';
+
+    $error = assertThrows(static fn () => $chain->send($message));
+
+    assertTrue($error instanceof TransportException);
+    assertTrue($error->isTemporary());
+});

@@ -1,0 +1,68 @@
+#
+# Пример конфига nginx для сервиса рассылки.
+# Скопировать в /etc/nginx/sites-available/mailer и поправить домен с путями.
+#
+
+server {
+    listen 80;
+    server_name mail.internal;
+
+    root /var/www/mailer/public;
+    index index.php;
+
+    charset utf-8;
+    client_max_body_size 30m;   # запас на письма с вложениями
+
+    access_log /var/log/nginx/mailer-access.log;
+    error_log  /var/log/nginx/mailer-error.log;
+
+    # Панель управления. Своей авторизации у неё нет — закрываем basic auth.
+    # Пароль: htpasswd -c /etc/nginx/mailer.htpasswd admin
+    location /ui {
+        auth_basic           "Панель рассылки";
+        auth_basic_user_file /etc/nginx/mailer.htpasswd;
+
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # API для приложений — ключ проверяет сам сервис.
+    # Если API нужен только своим серверам, ограничьте доступ по адресам.
+    location /api {
+        # allow 10.0.0.0/8;
+        # deny all;
+
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location ~ ^/index\.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_read_timeout 120s;   # синхронная отправка может занять время
+    }
+
+    # Прямой доступ к остальным php-файлам не нужен
+    location ~ \.php$ {
+        return 404;
+    }
+
+    location ~ /\. {
+        deny all;
+    }
+}
+
+#
+# Тот же сервер по HTTPS — так лучше, потому что через API ходят ключи.
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name mail.internal;
+#
+#     ssl_certificate     /etc/letsencrypt/live/mail.internal/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/mail.internal/privkey.pem;
+#
+#     ... остальное как выше ...
+# }

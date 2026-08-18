@@ -1,0 +1,25 @@
+# Локальный SMTP-релей: принимает письма от приложений, которые умеют только SMTP.
+# Слушает 127.0.0.1:2525, наружу выставлять не нужно.
+#
+#   cp deploy/mailer-smtpd.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now mailer-smtpd
+
+[Unit]
+Description=Локальный SMTP-релей сервиса рассылки
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/mailer
+ExecStart=/usr/bin/php /var/www/mailer/bin/mailer smtpd
+Restart=always
+RestartSec=5
+
+StandardOutput=append:/var/www/mailer/var/log/smtpd.log
+StandardError=append:/var/www/mailer/var/log/smtpd.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+* text=auto
+
+# Скрипты должны оставаться с LF, иначе на Linux сломается shebang
+bin/* text eol=lf
+*.sh text eol=lf
+deploy/*.service text eol=lf

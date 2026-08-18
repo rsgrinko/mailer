@@ -1,0 +1,144 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Подмена системного sendmail.
+ *
+ * Читает готовое письмо из stdin и кладёт его в нашу очередь. Благодаря этому
+ * любое приложение, которое умеет отправлять почту через sendmail (в том числе
+ * обычная функция mail() в PHP), начинает работать через сервис — без правки кода.
+ *
+ * Настройка в php.ini:
+ *   sendmail_path = /путь/к/проекту/bin/mailer-sendmail -t -i
+ *
+ * Поддерживаемые ключи (как у настоящего sendmail):
+ *   -t             взять получателей из заголовков письма
+ *   -i, -oi        не считать одиночную точку концом письма
+ *   -f адрес       отправитель конверта
+ *   -F имя         имя отправителя
+ *   остальные ключи принимаются и игнорируются
+ *
+ * Коды выхода: 0 — принято, 64 — ошибка в аргументах, 75 — временная ошибка
+ * (почтовая система повторит попытку позже).
+ */
+
+if (PHP_SAPI !== 'cli') {
+    exit(64);
+}
+
+require dirname(__DIR__) . '/bootstrap.php';
+
+use Mailer\MailService;
+use Mailer\Message\Address;
+use Mailer\Repository\MessageRepository;
+use Mailer\Repository\ProjectRepository;
+use Mailer\Support\Config;
+use Mailer\Support\Logger;
+
+$logger = new Logger('sendmail');
+
+$recipients  = [];
+$envelopeFrom = '';
+$senderName   = '';
+$useHeaders   = false;
+
+for ($i = 1; $i < $argc; $i++) {
+    $argument = $argv[$i];
+
+    if ($argument === '') {
+        continue;
+    }
+
+    if ($argument[0] !== '-') {
+        $recipients[] = $argument;
+        continue;
+    }
+
+    switch (true) {
+        case $argument === '-t':
+            $useHeaders = true;
+            break;
+
+        case $argument === '-f' || $argument === '-r':
+            $envelopeFrom = $argv[++$i] ?? '';
+            break;
+
+        case str_starts_with($argument, '-f'):
+            $envelopeFrom = substr($argument, 2);
+            break;
+
+        case $argument === '-F':
+            $senderName = $argv[++$i] ?? '';
+            break;
+
+        case str_starts_with($argument, '-F'):
+            $senderName = substr($argument, 2);
+            break;
+
+        default:
+            // -i, -oi, -bs и прочее нам не важны
+            break;
+    }
+}
+
+$raw = (string) file_get_contents('php://stdin');
+
+if (trim($raw) === '') {
+    fwrite(STDERR, 'Пустое письмо на входе' . PHP_EOL);
+    exit(64);
+}
+
+// Если получателей не передали аргументами — берём их из заголовков
+if ($recipients === [] || $useHeaders) {
+    $parsed = Mailer\Message\MimeParser::parse($raw);
+
+    foreach ([...$parsed['to'], ...$parsed['cc'], ...$parsed['bcc']] as $address) {
+        $recipients[] = $address->email;
+    }
+}
+
+$recipients = array_values(array_unique(array_filter(array_map('trim', $recipients))));
+
+if ($recipients === []) {
+    fwrite(STDERR, 'Не удалось определить получателей письма' . PHP_EOL);
+    exit(64);
+}
+
+try {
+    $projects = new ProjectRepository();
+    $project  = $projects->findOrCreate(
+        (string) Config::get('sendmail.project', 'local-sendmail'),
+        'Письма, пришедшие через sendmail-shim'
+    );
+
+    $payload = [
+        'raw'         => $raw,
+        'envelope_to' => $recipients,
+        'meta'        => ['user' => get_current_user()],
+    ];
+
+    if ($envelopeFrom !== '') {
+        $payload['envelope_from'] = $envelopeFrom;
+    }
+
+    if ($senderName !== '') {
+        $payload['meta']['sender_name'] = $senderName;
+    }
+
+    $result = (new MailService())->accept($payload, $project, MessageRepository::SOURCE_SENDMAIL);
+
+    $logger->info('Письмо принято из sendmail-shim', [
+        'uuid' => $result['uuid'],
+        'to'   => $recipients,
+    ]);
+
+    exit(0);
+} catch (Throwable $e) {
+    $logger->error('sendmail-shim не смог принять письмо', ['error' => $e->getMessage()]);
+    fwrite(STDERR, 'Не удалось принять письмо: ' . $e->getMessage() . PHP_EOL);
+
+    // 75 — временная ошибка: почтовая система попробует ещё раз
+    exit(75);
+}

@@ -1,0 +1,18 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Консольная утилита сервиса.
+ * Список команд: php bin/mailer help
+ */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('Этот файл запускается только из командной строки');
+}
+
+require dirname(__DIR__) . '/bootstrap.php';
+
+exit((new Mailer\Console\Application())->run($argv));
