@@ -193,8 +193,11 @@ final class TransportRepository
      */
     public function setDefault(int $id): void
     {
-        $this->db->execute('UPDATE transports SET is_default = 0');
-        $this->db->update('transports', ['is_default' => 1, 'active' => 1, 'updated_at' => Database::now()], ['id' => $id]);
+        // Обе строки только вместе: иначе можно остаться вообще без основного транспорта
+        $this->db->transaction(function () use ($id): void {
+            $this->db->execute('UPDATE transports SET is_default = 0');
+            $this->db->update('transports', ['is_default' => 1, 'active' => 1, 'updated_at' => Database::now()], ['id' => $id]);
+        });
     }
 
     /**

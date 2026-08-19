@@ -11,9 +11,11 @@ use Mailer\Message\MessageFactory;
 use Mailer\Queue\Queue;
 use Mailer\Queue\Sender;
 use Mailer\RateLimit\RateLimiter;
+use Mailer\Repository\EventRepository;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
+use Mailer\Storage\Database;
 use Mailer\Support\ValidationException;
 
 /**
@@ -256,4 +258,30 @@ test('ошибка отправки записывается транспорт�
         str_contains((string) $transport['last_error'], 'sendmail'),
         'у транспорта должна остаться последняя ошибка, а там: ' . var_export($transport['last_error'], true)
     );
+});
+
+test('удаление письма не оставляет следов и переживает вложенные транзакции', function (): void {
+    testTransport();
+
+    $service = new MailService();
+    $result  = $service->accept([
+        'to'      => 'user@example.com',
+        'subject' => 'Письмо на удаление',
+        'text'    => 'Текст',
+    ]);
+
+    $messages = new MessageRepository();
+    $events   = new EventRepository();
+    $id       = (int) $result['id'];
+
+    assertTrue($messages->find($id) !== null);
+    assertTrue($events->forMessage($id) !== []);
+
+    // Удаление внутри уже открытой транзакции не должно ломаться на вложенности
+    Database::instance()->transaction(static function () use ($messages, $id): void {
+        $messages->delete($id);
+    });
+
+    assertTrue($messages->find($id) === null, 'письма больше нет');
+    assertSame([], $events->forMessage($id), 'события удалились вместе с письмом');
 });

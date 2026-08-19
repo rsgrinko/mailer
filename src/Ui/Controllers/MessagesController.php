@@ -16,6 +16,7 @@ use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TemplateRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\WebhookRepository;
+use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Ui\View;
 use Throwable;
@@ -199,18 +200,21 @@ final class MessagesController
 
         $page = $this->messages->paginate(['status' => $status], 1, 500);
 
-        foreach ($page['items'] as $row) {
-            $id = (int) $row['id'];
+        // Пачка обрабатывается одной транзакцией: либо применилось ко всем письмам, либо ни к одному
+        Database::instance()->transaction(function () use ($page, $action, &$count): void {
+            foreach ($page['items'] as $row) {
+                $id = (int) $row['id'];
 
-            if ($action === 'retry') {
-                $count += $this->queue->retry($id, 'Массовый повтор из панели') ? 1 : 0;
-            } elseif ($action === 'cancel') {
-                $count += $this->queue->cancel($id, 'Массовая отмена из панели') ? 1 : 0;
-            } elseif ($action === 'delete') {
-                $this->messages->delete($id);
-                $count++;
+                if ($action === 'retry') {
+                    $count += $this->queue->retry($id, 'Массовый повтор из панели') ? 1 : 0;
+                } elseif ($action === 'cancel') {
+                    $count += $this->queue->cancel($id, 'Массовая отмена из панели') ? 1 : 0;
+                } elseif ($action === 'delete') {
+                    $this->messages->delete($id);
+                    $count++;
+                }
             }
-        }
+        });
 
         View::flash('Обработано писем: ' . $count);
 

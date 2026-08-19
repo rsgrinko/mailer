@@ -261,6 +261,12 @@ final class Database
      */
     public function transaction(callable $callback): mixed
     {
+        // Вложенный вызов работает внутри уже открытой транзакции: своей у него нет,
+        // поэтому и коммитить нечего — за всё отвечает внешняя
+        if ($this->pdo->inTransaction()) {
+            return $callback($this);
+        }
+
         $this->pdo->beginTransaction();
 
         try {

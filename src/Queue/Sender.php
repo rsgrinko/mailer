@@ -84,28 +84,31 @@ final class Sender
             $message = $this->messages->toMessage($row);
             $info    = $transport->send($message);
 
-            $this->messages->update($id, [
-                'status'         => MessageRepository::SENT,
-                'attempts'       => $attempt,
-                'transport_id'   => (int) $transportRow['id'],
-                'transport_used' => $transport->name(),
-                'sent_at'        => Database::now(),
-                'locked_by'      => null,
-                'locked_at'      => null,
-                'last_error'     => null,
-            ]);
+            // Письмо уже ушло, откатывать нечего — но записать об этом нужно всё разом:
+            // статус, событие, отметку транспорта и вебхук
+            $this->db->transaction(function () use ($id, $attempt, $transportRow, $transport, $info, $row): void {
+                $this->messages->update($id, [
+                    'status'         => MessageRepository::SENT,
+                    'attempts'       => $attempt,
+                    'transport_id'   => (int) $transportRow['id'],
+                    'transport_used' => $transport->name(),
+                    'sent_at'        => Database::now(),
+                    'locked_by'      => null,
+                    'locked_at'      => null,
+                    'last_error'     => null,
+                ]);
 
-            $this->events->add($id, EventRepository::SENT, $info);
-            $this->transports->markUsed((int) $transportRow['id'], null);
-            $this->limiter->hitTransport((int) $transportRow['id']);
+                $this->events->add($id, EventRepository::SENT, $info);
+                $this->transports->markUsed((int) $transportRow['id'], null);
+                $this->limiter->hitTransport((int) $transportRow['id']);
+                $this->queueWebhook($row, 'sent', ['info' => $info, 'transport' => $transport->name()]);
+            });
 
             $this->logger->info('Письмо отправлено', [
                 'uuid'      => $row['uuid'],
                 'transport' => $transport->name(),
                 'attempt'   => $attempt,
             ]);
-
-            $this->queueWebhook($row, 'sent', ['info' => $info, 'transport' => $transport->name()]);
 
             return ['status' => MessageRepository::SENT, 'info' => $info];
         } catch (TransportException $e) {
@@ -157,34 +160,37 @@ final class Sender
             return ['status' => MessageRepository::QUEUED, 'info' => $error];
         }
 
-        $this->messages->update($id, [
-            'status'     => MessageRepository::FAILED,
-            'attempts'   => $attempt,
-            'locked_by'  => null,
-            'locked_at'  => null,
-            'last_error' => $error,
-        ]);
+        // Отметка о неудаче, событие, ошибка транспорта и вебхук — одной транзакцией
+        $this->db->transaction(function () use ($id, $attempt, $error, $e, $transportName, $row): void {
+            $this->messages->update($id, [
+                'status'     => MessageRepository::FAILED,
+                'attempts'   => $attempt,
+                'locked_by'  => null,
+                'locked_at'  => null,
+                'last_error' => $error,
+            ]);
 
-        $this->events->add($id, EventRepository::FAILED, $error, [
-            'attempt'   => $attempt,
-            'temporary' => $e->isTemporary(),
-            'context'   => $e->getContext(),
-        ]);
+            $this->events->add($id, EventRepository::FAILED, $error, [
+                'attempt'   => $attempt,
+                'temporary' => $e->isTemporary(),
+                'context'   => $e->getContext(),
+            ]);
 
-        if ($transportName !== null) {
-            $transportRow = $this->transports->findByName($transportName);
-            if ($transportRow !== null) {
-                $this->transports->markUsed((int) $transportRow['id'], $error);
+            if ($transportName !== null) {
+                $transportRow = $this->transports->findByName($transportName);
+                if ($transportRow !== null) {
+                    $this->transports->markUsed((int) $transportRow['id'], $error);
+                }
             }
-        }
+
+            $this->queueWebhook($row, 'failed', ['error' => $error, 'attempts' => $attempt]);
+        });
 
         $this->logger->error('Письмо не отправлено', [
             'uuid'    => $row['uuid'],
             'attempt' => $attempt,
             'error'   => $error,
         ]);
-
-        $this->queueWebhook($row, 'failed', ['error' => $error, 'attempts' => $attempt]);
 
         return ['status' => MessageRepository::FAILED, 'info' => $error];
     }

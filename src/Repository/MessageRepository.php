@@ -381,15 +381,19 @@ final class MessageRepository
             return;
         }
 
+        // Сначала база одной транзакцией, и только потом файлы: если удаление сорвётся,
+        // письмо останется целым, а не превратится в запись без вложений
+        $this->db->transaction(function () use ($id): void {
+            (new EventRepository($this->db))->deleteForMessage($id);
+            $this->db->delete('messages', ['id' => $id]);
+        });
+
         foreach ($this->decodeArray($row['attachments_json'] ?? null) as $attachment) {
             $path = is_array($attachment) ? (string) ($attachment['path'] ?? '') : '';
             if ($path !== '' && is_file($path)) {
                 @unlink($path);
             }
         }
-
-        (new EventRepository($this->db))->deleteForMessage($id);
-        $this->db->delete('messages', ['id' => $id]);
     }
 
     /**
