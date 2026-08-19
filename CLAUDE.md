@@ -84,9 +84,11 @@ integrations/        всё, что ставится на сторону кли�
   php-sdk/           мини-SDK для PHP-проектов (один файл) + примеры
   dokuwiki/          плагин mailerservice для вики на DokuWiki
   wordpress/         плагин mailerservice для WordPress (wp_mail через сервис)
+tools/               инструменты разработки: loadtest.php — нагрузочные замеры
 tests/               собственный мини-тестраннер (без PHPUnit) и тесты
 deploy/              nginx.conf, systemd-юниты, шпаргалки по установке
-docs/                документация: API, SDK, интеграции, деплой, эксплуатация
+docs/                документация: API, SDK, интеграции, деплой, эксплуатация,
+                     LOADTEST.md — замеры и узкие места
 var/                 runtime: SQLite-база, логи, spool вложений, .eml из log-транспорта
 ```
 
