@@ -162,6 +162,7 @@ claim). По умолчанию — SQLite (`var/mailer.sqlite`), MySQL вклю
 php bin/mailer migrate               применить миграции
 php bin/mailer seed                  базовые данные (транспорты, шаблоны)
 php bin/mailer worker [--once]       воркер очереди
+php bin/mailer worker:restart        пометка в settings: воркер доработает пачку и выйдет
 php bin/mailer smtpd                 локальный SMTP-релей
 php bin/mailer key:create|key:list|key:revoke
 php bin/mailer user:create|user:list|user:password|user:delete   пользователи панели
@@ -203,6 +204,8 @@ backoff, rate limit, шаблоны, роутер. Транспорты в те�
 ## 11. Эксплуатация
 
 - Воркер — systemd (`deploy/mailer-worker.service`) либо cron (`php bin/mailer worker --once`).
+  Перезапуск — кнопкой в панели или `worker:restart`: воркер выходит сам, systemd поднимает
+  его заново (`Restart=always`).
 - SMTP-релей — `deploy/mailer-smtpd.service`, слушает только `127.0.0.1`.
 - nginx: `deploy/nginx.conf.example`, API и панель — разные `location`, на панели basic auth.
 - Каталог `var/` должен быть доступен на запись пользователю php-fpm и воркера.

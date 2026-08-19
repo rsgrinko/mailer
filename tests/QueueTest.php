@@ -223,3 +223,37 @@ test('повтор неудачного письма стирает прежню
     assertSame(MessageRepository::QUEUED, (string) $row['status']);
     assertTrue($row['sent_at'] === null, 'отметка об отправке должна быть очищена');
 });
+
+test('ошибка отправки записывается транспорту', function (): void {
+    $transports = new TransportRepository();
+
+    // sendmail с несуществующим путём падает сразу и без сети
+    if ($transports->findByName('test-broken') === null) {
+        $transports->create([
+            'name'       => 'test-broken',
+            'type'       => 'sendmail',
+            'settings'   => ['path' => '/нет/такого/sendmail'],
+            'from_email' => 'noreply@example.com',
+        ]);
+    }
+
+    $result = (new MailService())->accept([
+        'to'        => 'user@example.com',
+        'subject'   => 'Письмо в сломанный транспорт',
+        'text'      => 'текст',
+        'transport' => 'test-broken',
+    ]);
+
+    $id  = (int) $result['id'];
+    $row = (new MessageRepository())->find($id);
+
+    $sent = (new Sender())->send((array) $row);
+    assertSame(MessageRepository::FAILED, $sent['status']);
+
+    // Раньше ошибка оставалась только у письма, и в панели транспорт выглядел здоровым
+    $transport = (array) $transports->findByName('test-broken');
+    assertTrue(
+        str_contains((string) $transport['last_error'], 'sendmail'),
+        'у транспорта должна остаться последняя ошибка, а там: ' . var_export($transport['last_error'], true)
+    );
+});

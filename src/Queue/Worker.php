@@ -22,6 +22,9 @@ final class Worker
     /** Ключ, под которым воркер отмечается «жив» — панель показывает это состояние */
     public const HEARTBEAT_KEY = 'worker:heartbeat';
 
+    /** Сюда кладут время запроса на перезапуск: воркер увидит его и выйдет */
+    public const RESTART_KEY = 'worker:restart';
+
     private Queue $queue;
     private Sender $sender;
     private WebhookSender $webhooks;
@@ -34,7 +37,11 @@ final class Worker
 
     private string $id;
     private bool $stopping = false;
+    private bool $restarting = false;
     private int $processed = 0;
+
+    /** Время старта: запросы на перезапуск, сделанные раньше, нас не касаются */
+    private int $startedAt;
 
     public function __construct(?Database $db = null, ?callable $output = null)
     {
@@ -50,7 +57,17 @@ final class Worker
             echo $line . PHP_EOL;
         };
 
-        $this->id = (gethostname() ?: 'host') . ':' . getmypid();
+        $this->id        = (gethostname() ?: 'host') . ':' . getmypid();
+        $this->startedAt = time();
+    }
+
+    /**
+     * Просит работающий воркер завершиться. Под systemd он тут же поднимется заново,
+     * то есть это и есть «перезапустить»: нужен, например, после правки транспорта.
+     */
+    public static function requestRestart(?Database $db = null): void
+    {
+        (new SettingRepository($db ?? Database::instance()))->set(self::RESTART_KEY, (string) time());
     }
 
     /**
@@ -71,6 +88,15 @@ final class Worker
 
         while (!$this->stopping) {
             $this->heartbeat();
+
+            if ($this->restartRequested()) {
+                $this->restarting = true;
+                $this->stopping   = true;
+                $this->say('Запрошен перезапуск, завершаем работу…');
+                $this->logger->info('Запрошен перезапуск воркера', ['worker' => $this->id]);
+
+                break;
+            }
 
             // Раз в примерно 10 кругов подбираем зависшие письма и чистим счётчики
             if ($tick % 10 === 0) {
@@ -124,10 +150,26 @@ final class Worker
         }
 
         $this->heartbeat();
-        $this->say('Воркер завершил работу, обработано писем: ' . $this->processed);
-        $this->logger->info('Воркер остановлен', ['worker' => $this->id, 'processed' => $this->processed]);
+        $this->say($this->restarting
+            ? 'Воркер остановлен для перезапуска, обработано писем: ' . $this->processed
+            : 'Воркер завершил работу, обработано писем: ' . $this->processed);
+        $this->logger->info('Воркер остановлен', [
+            'worker'    => $this->id,
+            'processed' => $this->processed,
+            'restart'   => $this->restarting,
+        ]);
 
         return $this->processed;
+    }
+
+    /**
+     * Просили ли перезапуститься уже после того, как мы стартовали.
+     */
+    private function restartRequested(): bool
+    {
+        $requested = $this->settings->get(self::RESTART_KEY);
+
+        return $requested !== null && (int) $requested > $this->startedAt;
     }
 
     /**

@@ -42,10 +42,10 @@ php bin/mailer worker                              # воркер очереди
 
 ## Отправка письма
 
-Из PHP-проекта — через мини-SDK (один файл, `require` и всё):
+Из PHP-проекта — через мини-SDK (один файл, `require_once` и всё):
 
 ```php
-require '/путь/к/mailer/integrations/php-sdk/MailerClient.php';
+require_once '/путь/к/mailer/integrations/php-sdk/MailerClient.php';
 
 use Mailer\Sdk\Client;
 use Mailer\Sdk\Mail;

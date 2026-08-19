@@ -98,6 +98,10 @@ use Mailer\Ui\View;
         <form method="post" action="<?= View::e(View::url('/system/worker-once')) ?>">
             <button type="submit">Разовый проход воркера</button>
         </form>
+        <form method="post" action="<?= View::e(View::url('/system/restart-worker')) ?>"
+              onsubmit="return confirm('Перезапустить воркер? Он доработает текущую пачку и выйдет, systemd поднимет его снова.')">
+            <button type="submit">Перезапустить воркер</button>
+        </form>
         <form method="post" action="<?= View::e(View::url('/system/requeue')) ?>">
             <button type="submit">Вернуть зависшие письма</button>
         </form>

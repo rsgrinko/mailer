@@ -59,6 +59,9 @@ final class Sender
         $id      = (int) $row['id'];
         $attempt = (int) $row['attempts'] + 1;
 
+        // Запоминаем сразу: если отправка сорвётся, ошибку нужно записать транспорту
+        $transportName = null;
+
         try {
             $project = $row['project_id'] !== null ? $this->projects->find((int) $row['project_id']) : null;
 
@@ -68,11 +71,12 @@ final class Sender
             );
             $transport     = $resolved['transport'];
             $transportRow  = $resolved['row'];
+            $transportName = (string) $transportRow['name'];
 
             // Суточный лимит транспорта: не ошибка письма, просто отложим
             $limitError = $this->limiter->checkTransport($transportRow);
             if ($limitError !== null) {
-                return $this->handleFailure($row, $attempt, TransportException::temporary($limitError), (string) $transportRow['name']);
+                return $this->handleFailure($row, $attempt, TransportException::temporary($limitError), $transportName);
             }
 
             $this->events->add($id, EventRepository::ATTEMPT, 'Попытка №' . $attempt . ' через «' . $transport->name() . '»');
@@ -105,10 +109,10 @@ final class Sender
 
             return ['status' => MessageRepository::SENT, 'info' => $info];
         } catch (TransportException $e) {
-            return $this->handleFailure($row, $attempt, $e, null);
+            return $this->handleFailure($row, $attempt, $e, $transportName);
         } catch (Throwable $e) {
             // Любая другая ошибка (например, кривые настройки) — считаем окончательной
-            return $this->handleFailure($row, $attempt, TransportException::permanent($e->getMessage(), [], $e), null);
+            return $this->handleFailure($row, $attempt, TransportException::permanent($e->getMessage(), [], $e), $transportName);
         }
     }
 

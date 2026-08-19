@@ -54,6 +54,7 @@ final class Application
                 'seed'                 => $this->seed(),
                 'app:key'              => $this->appKey(),
                 'worker'               => $this->worker(),
+                'worker:restart'       => $this->workerRestart(),
                 'smtpd'                => $this->smtpd(),
                 'status'               => $this->status(),
 
@@ -117,6 +118,7 @@ final class Application
         $this->line('');
         $this->line('Работа очереди:');
         $this->line('  worker [--once] [--limit=N]    запустить воркер');
+        $this->line('  worker:restart                 попросить работающий воркер перезапуститься');
         $this->line('  smtpd                          локальный SMTP-релей для чужих приложений');
         $this->line('  queue:status                   что сейчас в очереди');
         $this->line('  queue:retry <id|--failed>      повторить письмо или все неудачные');
@@ -269,6 +271,32 @@ final class Application
         $limit = isset($this->options['limit']) ? (int) $this->options['limit'] : null;
 
         (new Worker())->run($once, $limit);
+
+        return 0;
+    }
+
+    /**
+     * Просит работающий воркер завершиться: под systemd он сразу поднимется заново.
+     */
+    private function workerRestart(): int
+    {
+        $settings  = new SettingRepository();
+        $heartbeat = $settings->get(Worker::HEARTBEAT_KEY);
+
+        if ($heartbeat === null) {
+            $this->line('Воркер ни разу не запускался — перезапускать нечего.');
+
+            return 1;
+        }
+
+        Worker::requestRestart();
+
+        $state = (array) json_decode($heartbeat, true);
+        $sleep = (int) Config::get('queue.sleep', 5);
+
+        $this->line('Запрос отправлен воркеру ' . (string) ($state['worker'] ?? '?'));
+        $this->line('Он доработает текущую пачку и выйдет — это займёт до ' . $sleep . ' с.');
+        $this->line('Если воркер под systemd, служба поднимет его сама; иначе запустите заново.');
 
         return 0;
     }

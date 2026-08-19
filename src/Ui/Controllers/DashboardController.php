@@ -137,6 +137,11 @@ final class DashboardController
                 View::flash('Удалено писем: ' . $deleted);
                 break;
 
+            case 'restart-worker':
+                Worker::requestRestart($db);
+                View::flash('Воркер получит запрос в ближайшие секунды и перезапустится');
+                break;
+
             case 'worker-once':
                 $processed = (new Worker($db, static function (string $line): void {
                 }))->run(true);
