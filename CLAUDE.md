@@ -72,7 +72,7 @@ src/                 ядро сервиса, namespace Mailer\
   Http/              Router, Route, Request, Response, Kernel, Middleware/, Controllers/ (API)
   Ui/                контроллеры, прослойки и вьюхи веб-панели мониторинга
   Smtpd/             SmtpServer — локальный SMTP-релей для приложений без SDK
-  Console/           Application + Commands/ (CLI-команды)
+  Console/           Application (реестр и справка) + Command + Commands/ (по классу на команду)
 routes/              карта адресов: api.php и ui.php (маршруты, группы, прослойки)
 public/index.php     единая точка входа: /api/v1/... и /ui/..., корень уводит на панель
                      (у панели свой вход по логину и паролю, см. src/Ui/Auth.php)
@@ -211,6 +211,12 @@ php bin/mailer route:list [строка]   карта адресов: адрес
 php bin/mailer logs:purge [--days=]   удалить старые файлы логов
 php bin/mailer test                  мини-тестраннер
 ```
+
+Новая консольная команда — класс в `src/Console/Commands` (имя, описание, строка вызова и
+`run()`), плюс строка в реестре `Application::COMMANDS`. Справка собирается из самих команд,
+руками её править не нужно. Аргументы и опции разбирает `Application`, командам они приходят
+в `$this->args` и `$this->options`; печать — `$this->line()`, колонки — `$this->pad()`
+(`str_pad` считает байты и ломает выравнивание на русских заголовках).
 
 ## 9. Соглашения по коду
 
