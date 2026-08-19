@@ -23,6 +23,9 @@ final class Request
     /** @var array<string, mixed> Разобранное тело: JSON или обычная форма */
     public array $body;
 
+    /** @var array<string, mixed> Что положили прослойки: проект по API-ключу и прочее */
+    public array $attributes = [];
+
     /**
      * Собирает запрос из суперглобальных переменных.
      */
@@ -114,6 +117,24 @@ final class Request
         }
 
         return '';
+    }
+
+    /**
+     * Данные, положенные прослойкой.
+     */
+    public function attribute(string $key, mixed $default = null): mixed
+    {
+        return $this->attributes[$key] ?? $default;
+    }
+
+    /**
+     * Прослойки складывают сюда всё, что пригодится обработчику.
+     */
+    public function setAttribute(string $key, mixed $value): self
+    {
+        $this->attributes[$key] = $value;
+
+        return $this;
     }
 
     /**
