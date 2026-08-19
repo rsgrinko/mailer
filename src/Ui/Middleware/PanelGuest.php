@@ -16,11 +16,11 @@ use Mailer\Ui\View;
  */
 final class PanelGuest
 {
-    private UserRepository $users;
+    private ?UserRepository $users;
 
     public function __construct(?UserRepository $users = null)
     {
-        $this->users = $users ?? new UserRepository();
+        $this->users = $users;
     }
 
     public function __invoke(Request $request, callable $next): Response
@@ -35,10 +35,17 @@ final class PanelGuest
             return Response::redirect(View::route('ui.dashboard'));
         }
 
-        if ($this->users->count() === 0) {
+        if ($this->users()->count() === 0) {
             return Response::redirect(View::route('ui.setup'));
         }
 
         return $next($request);
+    }
+    /**
+     * Репозиторий берём при первом обращении: собирать маршруты можно и с лежащей базой.
+     */
+    private function users(): UserRepository
+    {
+        return $this->users ??= new UserRepository();
     }
 }

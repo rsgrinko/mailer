@@ -24,38 +24,55 @@ use Throwable;
  */
 final class UiKernel
 {
-    private Router $router;
+    private ?Router $router = null;
     private Logger $logger;
 
     public function __construct()
     {
         $this->logger = new Logger('ui');
-        $this->router = (new Router())
-            ->middleware('panel-auth', new PanelAuth())
-            ->middleware('panel-guest', new PanelGuest())
-            ->middleware('panel-setup', new PanelSetup())
-            ->load(MAILER_ROOT . '/routes/ui.php');
     }
 
     public function handle(Request $request): Response
     {
         try {
-            return $this->router->dispatch($request);
+            return $this->router()->dispatch($request);
         } catch (Throwable $e) {
+            // По этому коду ошибку находят в логе: пользователю текст исключения показывать нечего
+            $code = strtoupper(bin2hex(random_bytes(3)));
+
             $this->logger->error('Ошибка панели', [
+                'code'  => $code,
                 'path'  => $request->path,
                 'error' => $e->getMessage(),
                 'file'  => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             $details = (bool) Config::get('app.debug', false)
                 ? $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ')'
-                : $e->getMessage();
+                : 'Внутренняя ошибка сервиса. Подробности в логе, код ошибки: ' . $code;
 
             return Response::html(
                 View::render('error', ['message' => $details], 'Ошибка'),
                 500
             );
         }
+    }
+
+    /**
+     * Роутер собирается при первом запросе, а не в конструкторе: прослойки лезут в базу,
+     * и её падение должно попасть в обработчик ошибок, а не в пустой ответ.
+     */
+    private function router(): Router
+    {
+        if ($this->router === null) {
+            $this->router = (new Router())
+                ->middleware('panel-auth', new PanelAuth())
+                ->middleware('panel-guest', new PanelGuest())
+                ->middleware('panel-setup', new PanelSetup())
+                ->load(MAILER_ROOT . '/routes/ui.php');
+        }
+
+        return $this->router;
     }
 }

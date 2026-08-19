@@ -10,6 +10,7 @@ use Mailer\Queue\Worker;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\SettingRepository;
 use Mailer\Storage\Database;
+use Mailer\Support\Logger;
 use Throwable;
 
 /**
@@ -30,8 +31,11 @@ final class HealthController
             Database::instance()->value('SELECT 1');
             $checks['database'] = ['ok' => true];
         } catch (Throwable $e) {
+            // Адрес открыт без ключа, поэтому наружу — только факт: подробности в лог
+            (new Logger('api'))->error('Проверка сервиса: база недоступна', ['error' => $e->getMessage()]);
+
             $status             = 'error';
-            $checks['database'] = ['ok' => false, 'error' => $e->getMessage()];
+            $checks['database'] = ['ok' => false, 'error' => 'Нет соединения с базой данных'];
         }
 
         // Очередь и воркер

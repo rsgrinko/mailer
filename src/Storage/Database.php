@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Mailer\Storage;
 
 use Mailer\Support\Config;
-use Mailer\Support\MailerException;
 use PDO;
 use PDOException;
 use Throwable;
@@ -33,7 +32,7 @@ final class Database
         $driver = (string) ($config['driver'] ?? self::SQLITE);
 
         if (!in_array($driver, [self::SQLITE, self::MYSQL], true)) {
-            throw new MailerException('Неизвестный драйвер базы данных: ' . $driver);
+            throw new StorageException('Неизвестный драйвер базы данных: ' . $driver);
         }
 
         $this->driver = $driver;
@@ -82,7 +81,7 @@ final class Database
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]);
         } catch (PDOException $e) {
-            throw new MailerException('Не удалось открыть базу SQLite: ' . $e->getMessage(), [], 0, $e);
+            throw new StorageException('Не удалось открыть базу SQLite: ' . $e->getMessage(), [], 0, $e);
         }
 
         // WAL даёт нормальную параллельную работу воркера и веб-части
@@ -111,7 +110,7 @@ final class Database
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
         } catch (PDOException $e) {
-            throw new MailerException('Не удалось подключиться к MySQL: ' . $e->getMessage(), [], 0, $e);
+            throw new StorageException('Не удалось подключиться к MySQL: ' . $e->getMessage(), [], 0, $e);
         }
     }
 
@@ -369,7 +368,7 @@ final class Database
 
             return $statement;
         } catch (PDOException $e) {
-            throw new MailerException(
+            throw new StorageException(
                 'Ошибка запроса к базе: ' . $e->getMessage(),
                 ['sql' => $sql],
                 0,

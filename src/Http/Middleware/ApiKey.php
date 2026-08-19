@@ -15,12 +15,12 @@ use Mailer\Support\Logger;
  */
 final class ApiKey
 {
-    private ProjectRepository $projects;
+    private ?ProjectRepository $projects;
     private Logger $logger;
 
     public function __construct(?ProjectRepository $projects = null, ?Logger $logger = null)
     {
-        $this->projects = $projects ?? new ProjectRepository();
+        $this->projects = $projects;
         $this->logger   = $logger ?? new Logger('api');
     }
 
@@ -32,7 +32,7 @@ final class ApiKey
             return Response::error('Не передан API-ключ. Ожидается заголовок Authorization: Bearer <ключ>', 401);
         }
 
-        $project = $this->projects->findByApiKey($key);
+        $project = $this->projects()->findByApiKey($key);
 
         if ($project === null) {
             $this->logger->warning('Неверный API-ключ', ['ip' => $request->ip()]);
@@ -45,5 +45,13 @@ final class ApiKey
         }
 
         return $next($request->setAttribute('project', $project));
+    }
+
+    /**
+     * Репозиторий берём при первом обращении: собирать маршруты можно и с лежащей базой.
+     */
+    private function projects(): ProjectRepository
+    {
+        return $this->projects ??= new ProjectRepository();
     }
 }
