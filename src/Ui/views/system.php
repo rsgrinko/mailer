@@ -82,10 +82,23 @@ use Mailer\Ui\View;
         <h2 style="margin-top:16px">PHP</h2>
         <dl class="props">
             <dt>Версия</dt><dd><?= View::e((string) $php['version']) ?> (<?= View::e((string) $php['sapi']) ?>)</dd>
-            <dt>Расширения</dt>
+            <dt>Расширения веб-процесса</dt>
             <dd>
                 <?php foreach ((array) $php['extensions'] as $name => $loaded) { ?>
                     <span class="badge <?= $loaded ? 'sent' : 'muted' ?>"><?= View::e($name) ?></span>
+                <?php } ?>
+            </dd>
+            <?php if (($worker['php'] ?? null) !== null) { ?>
+                <dt>Версия в CLI</dt><dd><?= View::e((string) $worker['php']) ?></dd>
+            <?php } ?>
+            <dt>Сигналы воркера (pcntl)</dt>
+            <dd>
+                <?php if (($worker['pcntl'] ?? null) === null) { ?>
+                    <span class="badge muted">воркер ещё не отчитывался</span>
+                <?php } elseif ($worker['pcntl']) { ?>
+                    <span class="badge sent">есть в CLI</span>
+                <?php } else { ?>
+                    <span class="badge muted">нет — воркер не поймает SIGTERM, остановка будет жёсткой</span>
                 <?php } ?>
             </dd>
         </dl>

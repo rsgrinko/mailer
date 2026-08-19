@@ -95,7 +95,6 @@ final class DashboardController
                     'openssl'    => extension_loaded('openssl'),
                     'mbstring'   => extension_loaded('mbstring'),
                     'curl'       => extension_loaded('curl'),
-                    'pcntl'      => extension_loaded('pcntl'),
                 ],
             ],
             'limiterUsage' => $limiter,
@@ -198,6 +197,8 @@ final class DashboardController
             'processed' => (int) ($data['processed'] ?? 0),
             'worker'    => $data['worker'] ?? null,
             'pid'       => $data['pid'] ?? null,
+            'php'       => $data['php'] ?? null,
+            'pcntl'     => $data['pcntl'] ?? null,
         ];
     }
 

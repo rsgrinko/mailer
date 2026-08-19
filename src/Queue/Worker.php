@@ -182,6 +182,9 @@ final class Worker
             'time'      => Database::now(),
             'processed' => $this->processed,
             'pid'       => getmypid(),
+            // Панель работает под веб-сервером и pcntl там не увидит — отчитываемся сами
+            'php'       => PHP_VERSION,
+            'pcntl'     => function_exists('pcntl_signal'),
         ], JSON_UNESCAPED_UNICODE));
     }
 
