@@ -58,6 +58,7 @@ sendmail, log/null, failover- и round-robin-цепочки).
 config/              конфигурация (config.php читает .env, значения по умолчанию)
 src/                 ядро сервиса, namespace Mailer\
   Support/           Env, Config, Logger, Str, Uuid, Validator, MailerException
+  Domain/            Project, TransportProfile — строка базы как объект для логики
   Storage/           Database (обёртка PDO, диалекты sqlite/mysql), Migrator
   Repository/        доступ к таблицам: Message, Project, Transport, Template, Event, Webhook
   Security/          ApiKey (генерация/хеш), Crypto (шифрование настроек транспорта)
@@ -245,6 +246,11 @@ php bin/mailer test                  мини-тестраннер
   только `View::route('ui.messages.show', ['id' => 5])` (лишние параметры уходят в
   query-строку), в остальном коде — `Router::url()`. Метода `View::url()` больше нет:
   поменялся адрес — правится одна строка в `routes/ui.php`.
+- Данные из базы ходят массивами (их же ждут шаблоны панели), но там, где по ним
+  принимаются решения — лимиты, доступ, выбор транспорта, — строка заворачивается в
+  объект: `Mailer\Domain\Project::fromRow()`, `TransportProfile::fromRow()`. Полностью
+  переводить проект на DTO смысла нет: без статического анализатора выигрыш маленький,
+  а переписывать пришлось бы и репозитории, и все вьюхи.
 - Разделы панели со списком и карточкой (проекты, транспорты, шаблоны, пользователи)
   наследуют `ResourceController`: он знает, что делать, когда записи нет. Вместо пяти
   одинаковых проверок — `$this->require($repo->find($id))`, а `RecordNotFound` ловит ядро

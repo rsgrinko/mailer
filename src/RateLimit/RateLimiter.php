@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Mailer\RateLimit;
 
+use Mailer\Domain\Project;
+use Mailer\Domain\TransportProfile;
 use Mailer\Storage\Database;
 
 /**
@@ -26,18 +28,16 @@ final class RateLimiter
      *
      * @param array<string, mixed> $project
      */
-    public function checkProject(array $project): ?string
+    public function checkProject(array $row): ?string
     {
-        $id = (int) ($project['id'] ?? 0);
+        $project = Project::fromRow($row);
 
-        $hourLimit = (int) ($project['rate_limit_hour'] ?? 0);
-        if ($hourLimit > 0 && $this->count($this->hourKey('project', $id)) >= $hourLimit) {
-            return 'Превышен часовой лимит проекта: ' . $hourLimit . ' писем в час';
+        if ($project->rateLimitHour > 0 && $this->count($this->hourKey('project', $project->id)) >= $project->rateLimitHour) {
+            return 'Превышен часовой лимит проекта: ' . $project->rateLimitHour . ' писем в час';
         }
 
-        $dayLimit = (int) ($project['rate_limit_day'] ?? 0);
-        if ($dayLimit > 0 && $this->count($this->dayKey('project', $id)) >= $dayLimit) {
-            return 'Превышен суточный лимит проекта: ' . $dayLimit . ' писем в сутки';
+        if ($project->rateLimitDay > 0 && $this->count($this->dayKey('project', $project->id)) >= $project->rateLimitDay) {
+            return 'Превышен суточный лимит проекта: ' . $project->rateLimitDay . ' писем в сутки';
         }
 
         return null;
@@ -48,16 +48,16 @@ final class RateLimiter
      *
      * @param array<string, mixed> $transport
      */
-    public function checkTransport(array $transport): ?string
+    public function checkTransport(array $row): ?string
     {
-        $limit = (int) ($transport['daily_limit'] ?? 0);
-        if ($limit <= 0) {
+        $transport = TransportProfile::fromRow($row);
+
+        if ($transport->dailyLimit <= 0) {
             return null;
         }
 
-        $id = (int) ($transport['id'] ?? 0);
-        if ($this->count($this->dayKey('transport', $id)) >= $limit) {
-            return 'Превышен суточный лимит транспорта «' . ($transport['name'] ?? '') . '»: ' . $limit . ' писем в сутки';
+        if ($this->count($this->dayKey('transport', $transport->id)) >= $transport->dailyLimit) {
+            return 'Превышен суточный лимит транспорта «' . $transport->name . '»: ' . $transport->dailyLimit . ' писем в сутки';
         }
 
         return null;
