@@ -149,7 +149,7 @@ class admin_plugin_mailerservice extends DokuWiki_Admin_Plugin
         echo '<input type="hidden" name="do" value="admin">';
         echo '<input type="hidden" name="page" value="mailerservice">';
         echo '<input type="hidden" name="mailerservice" value="check">';
-        echo '<input type="hidden" name="sectok" value="' . formSecurityToken(false) . '">';
+        echo formSecurityToken(false);
         echo '<button type="submit">' . hsc($this->getLang('h_check')) . '</button>';
         echo '</form>';
 
@@ -211,7 +211,7 @@ class admin_plugin_mailerservice extends DokuWiki_Admin_Plugin
         echo '<input type="hidden" name="do" value="admin">';
         echo '<input type="hidden" name="page" value="mailerservice">';
         echo '<input type="hidden" name="mailerservice" value="test">';
-        echo '<input type="hidden" name="sectok" value="' . formSecurityToken(false) . '">';
+        echo formSecurityToken(false);
         echo '<label>' . hsc($this->getLang('test_to')) . ' </label>';
         echo '<input type="email" name="to" value="' . hsc($this->testTo) . '" required>';
         echo ' <button type="submit">' . hsc($this->getLang('test_send')) . '</button>';
