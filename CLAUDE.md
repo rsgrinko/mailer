@@ -191,6 +191,7 @@ php bin/mailer user:create|user:list|user:password|user:delete   пользов�
 php bin/mailer transport:add|transport:list|transport:test|transport:default
 php bin/mailer queue:status|queue:retry|queue:purge
 php bin/mailer send:test <email>     тестовое письмо
+php bin/mailer route:list [строка]   карта адресов: адрес, обработчик, прослойки, имя
 php bin/mailer test                  мини-тестраннер
 ```
 

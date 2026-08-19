@@ -65,6 +65,7 @@ php bin/mailer worker            воркер (демоном)
 php bin/mailer worker --once     один проход (для cron)
 php bin/mailer worker:restart    попросить работающий воркер перезапуститься
 php bin/mailer smtpd             локальный SMTP-релей
+php bin/mailer route:list        какие адреса обслуживает сервис
 ```
 
 ## Перезапуск воркера
