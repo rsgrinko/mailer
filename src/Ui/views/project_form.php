@@ -128,8 +128,8 @@ $isNew = $project === null;
     <div class="card">
         <h2>Последние письма проекта</h2>
         <div class="table-wrap">
-            <table>
-                <tr><th>Когда</th><th>Статус</th><th>Тема</th><th></th></tr>
+            <table class="list">
+                <tr class="head"><th>Когда</th><th>Статус</th><th>Тема</th><th></th></tr>
                 <?php foreach ($recent as $row) { ?>
                     <tr>
                         <td class="small nowrap"><?= View::e(View::date((string) $row['created_at'])) ?></td>

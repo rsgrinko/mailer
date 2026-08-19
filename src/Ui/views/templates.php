@@ -20,8 +20,8 @@ use Mailer\Ui\View;
 
 <div class="card" style="margin-top:16px">
     <div class="table-wrap">
-        <table>
-            <tr><th>Имя</th><th>Тема</th><th>Переменные</th><th>Изменён</th></tr>
+        <table class="list">
+            <tr class="head"><th>Имя</th><th>Тема</th><th class="hide-sm">Переменные</th><th class="hide-sm">Изменён</th></tr>
 
             <?php foreach ($items as $item) { ?>
                 <tr>
@@ -32,8 +32,8 @@ use Mailer\Ui\View;
                         <?php } ?>
                     </td>
                     <td><?= View::e(Str::limit((string) ($item['subject'] ?? ''), 50)) ?></td>
-                    <td class="mono small"><?= View::e(implode(', ', (array) $item['variables'])) ?></td>
-                    <td class="small"><?= View::e(View::date((string) $item['updated_at'])) ?></td>
+                    <td class="mono small hide-sm"><?= View::e(implode(', ', (array) $item['variables'])) ?></td>
+                    <td class="small hide-sm"><?= View::e(View::date((string) $item['updated_at'])) ?></td>
                 </tr>
             <?php } ?>
 

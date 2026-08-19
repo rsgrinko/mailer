@@ -63,16 +63,16 @@ foreach ($daily as $day) {
 </div>
 
 <div class="grid cols-2">
-    <div class="card">
+    <div class="card chart-card">
         <h2>Письма за две недели</h2>
         <div class="chart">
             <?php foreach ($daily as $day) { ?>
                 <div class="bar" title="<?= View::e($day['date']) ?>: всего <?= $day['total'] ?>, отправлено <?= $day['sent'] ?>, ошибок <?= $day['failed'] ?>">
                     <?php if ($day['failed'] > 0) { ?>
-                        <div class="failed" style="height: <?= max(2, (int) round($day['failed'] / $max * 110)) ?>px"></div>
+                        <div class="failed" style="height: <?= round($day['failed'] / $max * 100, 1) ?>%"></div>
                     <?php } ?>
                     <?php if ($day['sent'] > 0) { ?>
-                        <div class="sent" style="height: <?= max(2, (int) round($day['sent'] / $max * 110)) ?>px"></div>
+                        <div class="sent" style="height: <?= round($day['sent'] / $max * 100, 1) ?>%"></div>
                     <?php } ?>
                     <div class="day"><?= View::e(date('d.m', (int) strtotime($day['date']))) ?></div>
                 </div>
@@ -82,27 +82,24 @@ foreach ($daily as $day) {
 
     <div class="card">
         <h2>Статусы</h2>
-        <table>
+        <div class="counts">
             <?php foreach ($stats['by_status'] as $status => $count) { ?>
-                <tr>
-                    <td><span class="badge <?= View::e($status) ?>"><?= View::e(View::status((string) $status)) ?></span></td>
-                    <td><?= (int) $count ?></td>
-                    <td style="text-align:right">
-                        <a href="<?= View::e(View::url('/messages', ['status' => $status])) ?>">показать</a>
-                    </td>
-                </tr>
+                <a class="item" href="<?= View::e(View::url('/messages', ['status' => $status])) ?>">
+                    <span class="badge <?= View::e($status) ?>"><?= View::e(View::status((string) $status)) ?></span>
+                    <span class="num"><?= (int) $count ?></span>
+                </a>
             <?php } ?>
-        </table>
+        </div>
 
         <h2 style="margin-top:16px">Вебхуки</h2>
-        <table>
+        <div class="counts">
             <?php foreach ($webhooks as $status => $count) { ?>
-                <tr>
-                    <td><span class="badge <?= View::e($status) ?>"><?= View::e(View::webhookStatus((string) $status)) ?></span></td>
-                    <td><?= (int) $count ?></td>
-                </tr>
+                <a class="item" href="<?= View::e(View::url('/webhooks', ['status' => $status])) ?>">
+                    <span class="badge <?= View::e($status) ?>"><?= View::e(View::webhookStatus((string) $status)) ?></span>
+                    <span class="num"><?= (int) $count ?></span>
+                </a>
             <?php } ?>
-        </table>
+        </div>
     </div>
 </div>
 
@@ -110,13 +107,13 @@ foreach ($daily as $day) {
     <div class="card">
         <h2>Последние неудачные письма</h2>
         <div class="table-wrap">
-            <table>
-                <tr><th>Когда</th><th>Тема</th><th>Кому</th><th>Ошибка</th><th></th></tr>
+            <table class="list">
+                <tr class="head"><th>Когда</th><th>Тема</th><th class="hide-sm">Кому</th><th>Ошибка</th><th></th></tr>
                 <?php foreach ($failed as $row) { ?>
                     <tr>
                         <td class="nowrap"><?= View::e(View::ago((string) $row['updated_at'])) ?></td>
                         <td><?= View::e(Str::limit((string) $row['subject'], 50)) ?></td>
-                        <td class="mono"><?= View::e(implode(', ', array_column(json_decode((string) ($row['to_json'] ?? '[]'), true) ?: [], 'email'))) ?></td>
+                        <td class="mono hide-sm"><?= View::e(implode(', ', array_column(json_decode((string) ($row['to_json'] ?? '[]'), true) ?: [], 'email'))) ?></td>
                         <td class="small"><?= View::e(Str::limit((string) $row['last_error'], 90)) ?></td>
                         <td><a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a></td>
                     </tr>
@@ -130,8 +127,8 @@ foreach ($daily as $day) {
     <div class="card">
         <h2>Последние письма</h2>
         <div class="table-wrap">
-            <table>
-                <tr><th>Когда</th><th>Статус</th><th>Тема</th><th></th></tr>
+            <table class="list">
+                <tr class="head"><th>Когда</th><th>Статус</th><th>Тема</th><th></th></tr>
                 <?php foreach ($recent as $row) { ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::ago((string) $row['created_at'])) ?></td>
@@ -147,7 +144,7 @@ foreach ($daily as $day) {
     <div class="card">
         <h2>Что происходило</h2>
         <div class="table-wrap">
-            <table>
+            <table class="list">
                 <?php foreach ($events as $event) { ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::ago((string) $event['created_at'])) ?></td>
@@ -164,17 +161,17 @@ foreach ($daily as $day) {
 <div class="card">
     <h2>Транспорты</h2>
     <div class="table-wrap">
-        <table>
-            <tr><th>Имя</th><th>Тип</th><th>Признаки</th><th>Последняя отправка</th><th>Последняя ошибка</th></tr>
+        <table class="list">
+            <tr class="head"><th>Имя</th><th class="hide-sm">Тип</th><th>Признаки</th><th class="hide-sm">Последняя отправка</th><th>Последняя ошибка</th></tr>
             <?php foreach ($transports as $transport) { ?>
                 <tr>
                     <td><a href="<?= View::e(View::url('/transports/' . $transport['id'])) ?>"><?= View::e($transport['name']) ?></a></td>
-                    <td><?= View::e(View::transportType((string) $transport['type'])) ?></td>
+                    <td class="hide-sm"><?= View::e(View::transportType((string) $transport['type'])) ?></td>
                     <td>
                         <?php if ((int) $transport['is_default'] === 1) { ?><span class="badge sent">основной</span><?php } ?>
                         <?php if ((int) $transport['active'] !== 1) { ?><span class="badge muted">выключен</span><?php } ?>
                     </td>
-                    <td class="small"><?= View::e(View::ago($transport['last_used_at'])) ?></td>
+                    <td class="small hide-sm"><?= View::e(View::ago($transport['last_used_at'])) ?></td>
                     <td class="small"><?= View::e(Str::limit((string) ($transport['last_error'] ?? ''), 60)) ?></td>
                 </tr>
             <?php } ?>

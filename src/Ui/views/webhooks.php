@@ -58,10 +58,10 @@ use Mailer\Ui\View;
 
 <div class="card">
     <div class="table-wrap">
-        <table>
-            <tr>
-                <th>Создан</th><th>Событие</th><th>Статус</th><th>Адрес</th>
-                <th>Попытки</th><th>Ответ</th><th>Ошибка</th><th></th>
+        <table class="list">
+            <tr class="head">
+                <th>Создан</th><th>Событие</th><th>Статус</th><th class="hide-sm">Адрес</th>
+                <th class="hide-sm">Попытки</th><th class="hide-sm">Ответ</th><th>Ошибка</th><th></th>
             </tr>
 
             <?php foreach ($result['items'] as $item) { ?>
@@ -69,9 +69,9 @@ use Mailer\Ui\View;
                     <td class="small nowrap"><?= View::e(View::date((string) $item['created_at'])) ?></td>
                     <td><?= View::e((string) $item['event']) ?></td>
                     <td><span class="badge <?= View::e((string) $item['status']) ?>"><?= View::e(View::webhookStatus((string) $item['status'])) ?></span></td>
-                    <td class="small mono"><?= View::e(Str::limit((string) $item['url'], 45)) ?></td>
-                    <td class="small"><?= (int) $item['attempts'] ?></td>
-                    <td class="small"><?= View::e((string) ($item['response_code'] ?? '—')) ?></td>
+                    <td class="small mono hide-sm"><?= View::e(Str::limit((string) $item['url'], 45)) ?></td>
+                    <td class="small hide-sm"><?= (int) $item['attempts'] ?></td>
+                    <td class="small hide-sm"><?= View::e((string) ($item['response_code'] ?? '—')) ?></td>
                     <td class="small"><?= View::e(Str::limit((string) ($item['last_error'] ?? ''), 40)) ?></td>
                     <td class="nowrap">
                         <div class="row">

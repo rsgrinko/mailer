@@ -99,15 +99,15 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
 
 <div class="card">
     <div class="table-wrap">
-        <table>
-            <tr>
+        <table class="list">
+            <tr class="head">
                 <th>Создано</th>
                 <th>Статус</th>
                 <th>Тема</th>
                 <th>Кому</th>
-                <th>Транспорт</th>
-                <th>Попытки</th>
-                <th>Размер</th>
+                <th class="hide-sm">Транспорт</th>
+                <th class="hide-sm">Попытки</th>
+                <th class="hide-sm">Размер</th>
                 <th></th>
             </tr>
 
@@ -131,16 +131,16 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                         <?php if (($row['tag'] ?? null) !== null) { ?>
                             <span class="badge muted"><?= View::e((string) $row['tag']) ?></span>
                         <?php } ?>
-                        <div class="mono muted small"><?= View::e((string) $row['uuid']) ?></div>
+                        <div class="mono muted small hide-sm"><?= View::e((string) $row['uuid']) ?></div>
                     </td>
                     <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
-                    <td class="small">
+                    <td class="small hide-sm">
                         <?= View::e((string) ($row['transport_used'] ?? '—')) ?><br>
                         <span class="muted"><?= View::e(View::source((string) $row['source'])) ?></span>
                     </td>
-                    <td class="small"><?= (int) $row['attempts'] ?> / <?= (int) $row['max_attempts'] ?></td>
-                    <td class="small nowrap"><?= View::e(Str::bytes((int) $row['size'])) ?></td>
-                    <td class="nowrap">
+                    <td class="small hide-sm"><?= (int) $row['attempts'] ?> / <?= (int) $row['max_attempts'] ?></td>
+                    <td class="small nowrap hide-sm"><?= View::e(Str::bytes((int) $row['size'])) ?></td>
+                    <td class="nowrap hide-sm">
                         <a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a>
                     </td>
                 </tr>

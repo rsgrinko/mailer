@@ -98,7 +98,7 @@ PHP 8.1+ с расширениями `pdo_sqlite` (или `pdo_mysql`), `openssl
 ```
 bin/           консольные утилиты: mailer, mailer-sendmail, mailer-send
 config/        настройки (читают .env)
-public/        единая точка входа: /api/v1 и /ui
+public/        единая точка входа: /api/v1 и /ui (корень уводит на панель)
 integrations/  код для клиентских проектов: php-sdk, плагин DokuWiki
 src/           код сервиса
 tests/         тесты (php bin/mailer test)

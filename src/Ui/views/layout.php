@@ -102,6 +102,10 @@ $menu = [
 
         .brand b { font-size: 17px; }
         .brand span { color: var(--muted); font-size: 12px; }
+        .brand .tagline { white-space: nowrap; }
+
+        /* Кнопка меню нужна только на узких экранах, разворачивает её чекбокс без единой строчки JS */
+        .burger { display: none; }
         .brand .who { margin-left: auto; display: flex; align-items: center; gap: 10px; }
         .brand .who form { display: inline; }
 
@@ -136,6 +140,8 @@ $menu = [
         .card > h2:first-child { margin-top: 0; }
 
         .grid { display: grid; gap: 16px; }
+        /* Без этого широкая таблица внутри карточки распирает колонку вместо того, чтобы прокручиваться */
+        .grid > * { min-width: 0; }
         .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
         .grid.cols-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
@@ -205,6 +211,7 @@ $menu = [
         input[type=file],
         label.inline,
         label.inline > span,
+        .burger,
         .pagination a,
         .chart .bar {
             cursor: pointer;
@@ -255,11 +262,45 @@ $menu = [
             background: #fff;
         }
 
-        .chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
-        .chart .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
-        .chart .bar .sent { background: var(--ok); border-radius: 3px 3px 0 0; }
-        .chart .bar .failed { background: var(--err); }
-        .chart .bar .day { text-align: center; font-size: 10px; color: var(--muted); margin-top: 4px; }
+        /* Столбики считаются в процентах от высоты графика, подпись дня лежит под ними в отступе */
+        .chart { display: flex; align-items: flex-end; gap: 4px; height: 110px; }
+
+        /* Карточка с графиком тянется по высоте соседней — график занимает её целиком, а не висит вверху */
+        .card.chart-card { display: flex; flex-direction: column; }
+        .chart-card .chart { flex: 1; height: auto; min-height: 110px; }
+
+        .chart .bar {
+            flex: 1 1 0;
+            min-width: 0;
+            height: 100%;
+            position: relative;
+            padding-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 2px;
+        }
+
+        .chart .bar .sent { background: var(--ok); border-radius: 3px 3px 0 0; min-height: 2px; }
+        .chart .bar .failed { background: var(--err); min-height: 2px; }
+        .chart .bar .day { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 10px; color: var(--muted); }
+
+        /* Счётчики «плашка — число»: таблица разносила их по краям карточки */
+        .counts { display: flex; flex-direction: column; }
+
+        .counts .item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .counts .item:last-child { border-bottom: none; }
+        .counts .item:hover { text-decoration: none; }
+        .counts a.item:hover .badge { outline: 1px solid var(--accent); }
+        .counts .item .num { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
 
         .pagination { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
         .pagination a, .pagination span { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; }
@@ -272,14 +313,102 @@ $menu = [
         .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
         .tabs a { padding: 8px 12px; color: var(--text); }
         .tabs a.active { border-bottom: 2px solid var(--accent); font-weight: 600; }
+
+        /* Планшеты: таблицы становятся уже за счёт второстепенных колонок */
+        @media (max-width: 900px) {
+            .hide-sm { display: none; }
+        }
+
+        /* Телефоны и узкие окна */
+        @media (max-width: 760px) {
+            header { padding: 0 12px; }
+            .brand { padding: 10px 0; gap: 8px; }
+            .brand .tagline { display: none; }
+            .brand .who { margin-left: 0; gap: 8px; }
+            .brand .who .muted { display: none; }
+
+            /* Меню прячем под кнопку: десять пунктов в строку на телефон не помещаются */
+            .burger {
+                display: inline-flex;
+                margin-left: auto;
+                align-items: center;
+                justify-content: center;
+                width: 40px;
+                height: 34px;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                font-size: 18px;
+                line-height: 1;
+                user-select: none;
+            }
+
+            .menu-toggle:checked ~ .brand .burger {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+
+            nav { display: none; }
+
+            .menu-toggle:checked ~ nav {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                padding-bottom: 10px;
+            }
+
+            nav a { border-radius: 6px; padding: 10px 12px; }
+
+            main { padding: 12px; }
+
+            h1 { font-size: 18px; }
+
+            .card { padding: 12px; }
+            .grid { gap: 12px; }
+            .grid.cols-2 { grid-template-columns: 1fr; }
+            .grid.cols-4 { grid-template-columns: 1fr 1fr; }
+            .stat .value { font-size: 22px; }
+
+            /* Фильтры в два узких столбца, иначе восемь полей занимают весь экран */
+            .filters { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+
+            /* Поля формы, стоящие в строку, на телефоне идут друг под другом */
+            .row > label { min-width: 100%; }
+
+            th, td { padding: 6px 8px; }
+
+            /* Скрытые колонки не должны всплыть обратно из-за display:block у ячеек */
+            table.list td.hide-sm { display: none; }
+
+            /* Списки разворачиваем в карточки: иначе колонки сжимаются в столбик из отдельных букв */
+            table.list, table.list tbody, table.list tr, table.list td { display: block; width: auto; }
+            table.list tr.head { display: none; }
+            table.list tr { padding: 10px 0; border-bottom: 1px solid var(--border); }
+            table.list tr.head + tr { padding-top: 0; }
+            table.list tr:last-child { border-bottom: none; padding-bottom: 0; }
+            table.list td { border: none; padding: 2px 0; }
+            table.list td:empty { display: none; }
+
+            /* График ниже, подписи через день — иначе даты налезают друг на друга */
+            .chart, .chart-card .chart { height: 80px; min-height: 0; flex: none; }
+            .chart .bar .day { font-size: 9px; }
+            .chart .bar:nth-child(even) .day { display: none; }
+
+            dl.props { grid-template-columns: 1fr; gap: 0; }
+            dl.props dt { margin-top: 10px; font-size: 12px; }
+            dl.props dt:first-child { margin-top: 0; }
+
+            iframe.preview { min-height: 220px; }
+        }
     </style>
 </head>
 <body>
 <?php if (!$bare) { ?>
 <header>
+    <input type="checkbox" id="menu-toggle" class="menu-toggle" hidden>
     <div class="brand">
         <b>Почтовый сервис</b>
-        <span>панель управления</span>
+        <span class="tagline">панель управления</span>
 
         <?php if ($user !== null) { ?>
             <span class="who">
@@ -289,6 +418,8 @@ $menu = [
                 </form>
             </span>
         <?php } ?>
+
+        <label class="burger" for="menu-toggle" title="Меню" aria-label="Меню">☰</label>
     </div>
     <nav>
         <?php foreach ($menu as $key => [$label, $path]) { ?>

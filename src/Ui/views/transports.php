@@ -21,13 +21,13 @@ use Mailer\Ui\View;
 
 <div class="card" style="margin-top:16px">
     <div class="table-wrap">
-        <table>
-            <tr>
+        <table class="list">
+            <tr class="head">
                 <th>Имя</th>
                 <th>Тип</th>
-                <th>Куда отправляет</th>
-                <th>Отправитель</th>
-                <th>Сегодня</th>
+                <th class="hide-sm">Куда отправляет</th>
+                <th class="hide-sm">Отправитель</th>
+                <th class="hide-sm">Сегодня</th>
                 <th>Состояние</th>
                 <th></th>
             </tr>
@@ -49,9 +49,9 @@ use Mailer\Ui\View;
                         <?php if ((int) $item['is_default'] === 1) { ?><span class="badge sent">основной</span><?php } ?>
                     </td>
                     <td><?= View::e(View::transportType((string) $item['type'])) ?></td>
-                    <td class="small mono"><?= View::e(Str::limit($target, 50)) ?></td>
-                    <td class="small"><?= View::e((string) ($item['from_email'] ?? '—')) ?></td>
-                    <td class="small">
+                    <td class="small mono hide-sm"><?= View::e(Str::limit($target, 50)) ?></td>
+                    <td class="small hide-sm"><?= View::e((string) ($item['from_email'] ?? '—')) ?></td>
+                    <td class="small hide-sm">
                         <?= (int) ($usage[(int) $item['id']] ?? 0) ?><?= (int) $item['daily_limit'] > 0 ? ' / ' . (int) $item['daily_limit'] : '' ?>
                     </td>
                     <td class="small">

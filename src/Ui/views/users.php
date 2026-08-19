@@ -24,11 +24,11 @@ use Mailer\Ui\View;
     </p>
 
     <div class="table-wrap">
-        <table>
-            <tr>
+        <table class="list">
+            <tr class="head">
                 <th>Логин</th>
-                <th>Имя</th>
-                <th>Последний вход</th>
+                <th class="hide-sm">Имя</th>
+                <th class="hide-sm">Последний вход</th>
                 <th>Состояние</th>
                 <th></th>
             </tr>
@@ -42,8 +42,8 @@ use Mailer\Ui\View;
                             <span class="muted small">— это вы</span>
                         <?php } ?>
                     </td>
-                    <td class="small"><?= View::e((string) ($item['name'] ?? '—')) ?></td>
-                    <td class="small nowrap">
+                    <td class="small hide-sm"><?= View::e((string) ($item['name'] ?? '—')) ?></td>
+                    <td class="small nowrap hide-sm">
                         <?= View::e(View::date($item['last_login_at'] === null ? null : (string) $item['last_login_at'])) ?>
                         <?php if (($item['last_login_ip'] ?? null) !== null) { ?>
                             <div class="muted mono small"><?= View::e((string) $item['last_login_ip']) ?></div>

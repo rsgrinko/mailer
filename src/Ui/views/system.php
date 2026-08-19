@@ -48,11 +48,14 @@ use Mailer\Ui\View;
         </dl>
 
         <h2 style="margin-top:16px">Записи в таблицах</h2>
-        <table>
+        <div class="counts">
             <?php foreach ($tables as $table => $count) { ?>
-                <tr><td class="mono"><?= View::e($table) ?></td><td><?= (int) $count ?></td></tr>
+                <div class="item">
+                    <span class="mono"><?= View::e($table) ?></span>
+                    <span class="num"><?= (int) $count ?></span>
+                </div>
             <?php } ?>
-        </table>
+        </div>
     </div>
 
     <div class="card">
@@ -136,8 +139,8 @@ use Mailer\Ui\View;
     <div class="card">
         <h2>Счётчики лимитов</h2>
         <div class="table-wrap">
-            <table>
-                <tr><th>Ключ</th><th>Значение</th><th>Сбросится</th></tr>
+            <table class="list">
+                <tr class="head"><th>Ключ</th><th>Значение</th><th>Сбросится</th></tr>
                 <?php foreach ($counters as $counter) { ?>
                     <tr>
                         <td class="mono small"><?= View::e((string) $counter['counter_key']) ?></td>
@@ -155,8 +158,8 @@ use Mailer\Ui\View;
     <div class="card">
         <h2>Служебные значения</h2>
         <div class="table-wrap">
-            <table>
-                <tr><th>Ключ</th><th>Значение</th><th>Обновлено</th></tr>
+            <table class="list">
+                <tr class="head"><th>Ключ</th><th>Значение</th><th>Обновлено</th></tr>
                 <?php foreach ($settings as $key => $item) { ?>
                     <tr>
                         <td class="mono small"><?= View::e($key) ?></td>

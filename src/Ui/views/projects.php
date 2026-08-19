@@ -21,14 +21,14 @@ use Mailer\Ui\View;
 
 <div class="card" style="margin-top:16px">
     <div class="table-wrap">
-        <table>
-            <tr>
+        <table class="list">
+            <tr class="head">
                 <th>Проект</th>
                 <th>Ключ</th>
-                <th>Отправитель</th>
-                <th>За час</th>
-                <th>За сутки</th>
-                <th>Вебхук</th>
+                <th class="hide-sm">Отправитель</th>
+                <th class="hide-sm">За час</th>
+                <th class="hide-sm">За сутки</th>
+                <th class="hide-sm">Вебхук</th>
                 <th>Состояние</th>
             </tr>
 
@@ -41,14 +41,14 @@ use Mailer\Ui\View;
                         <?php } ?>
                     </td>
                     <td class="mono small"><?= View::e(ApiKey::mask((string) $item['api_key_prefix'])) ?></td>
-                    <td class="small"><?= View::e((string) ($item['default_from_email'] ?? '—')) ?></td>
-                    <td class="small">
+                    <td class="small hide-sm"><?= View::e((string) ($item['default_from_email'] ?? '—')) ?></td>
+                    <td class="small hide-sm">
                         <?= (int) ($usage[(int) $item['id']]['hour'] ?? 0) ?><?= (int) $item['rate_limit_hour'] > 0 ? ' / ' . (int) $item['rate_limit_hour'] : '' ?>
                     </td>
-                    <td class="small">
+                    <td class="small hide-sm">
                         <?= (int) ($usage[(int) $item['id']]['day'] ?? 0) ?><?= (int) $item['rate_limit_day'] > 0 ? ' / ' . (int) $item['rate_limit_day'] : '' ?>
                     </td>
-                    <td class="small mono"><?= View::e((string) ($item['webhook_url'] ?? '—')) ?></td>
+                    <td class="small mono hide-sm"><?= View::e((string) ($item['webhook_url'] ?? '—')) ?></td>
                     <td>
                         <?php if ((int) $item['active'] === 1) { ?>
                             <span class="badge sent">активен</span>
