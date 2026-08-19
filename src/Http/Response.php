@@ -89,6 +89,16 @@ final class Response
         return $this;
     }
 
+    /**
+     * Заголовки ответа — нужны проверкам: куда именно ведёт перенаправление.
+     *
+     * @return array<string, string>
+     */
+    public function headers(): array
+    {
+        return $this->headers;
+    }
+
     public function status(): int
     {
         return $this->status;

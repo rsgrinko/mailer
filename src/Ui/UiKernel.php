@@ -37,6 +37,11 @@ final class UiKernel
     {
         try {
             return $this->router()->dispatch($request);
+        } catch (RecordNotFound $e) {
+            // Записи нет — говорим об этом и возвращаем в список раздела
+            View::flash($e->getMessage(), 'error');
+
+            return Response::redirect(View::route($e->route()));
         } catch (Throwable $e) {
             // По этому коду ошибку находят в логе: пользователю текст исключения показывать нечего
             $code = strtoupper(bin2hex(random_bytes(3)));

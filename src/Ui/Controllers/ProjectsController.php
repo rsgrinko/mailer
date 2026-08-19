@@ -17,7 +17,7 @@ use Throwable;
 /**
  * Проекты и их API-ключи.
  */
-final class ProjectsController
+final class ProjectsController extends ResourceController
 {
     private ProjectRepository $projects;
     private TransportRepository $transports;
@@ -58,13 +58,7 @@ final class ProjectsController
 
     public function form(Request $request, ?int $id): Response
     {
-        $project = $id !== null ? $this->projects->find($id) : null;
-
-        if ($id !== null && $project === null) {
-            View::flash('Проект не найден', 'error');
-
-            return Response::redirect(View::route('ui.projects'));
-        }
+        $project = $this->requireIfEditing($id, $id === null ? null : $this->projects->find($id));
 
         $recent = [];
         if ($project !== null) {
@@ -122,13 +116,7 @@ final class ProjectsController
 
     public function action(Request $request, int $id, string $action): Response
     {
-        $project = $this->projects->find($id);
-
-        if ($project === null) {
-            View::flash('Проект не найден', 'error');
-
-            return Response::redirect(View::route('ui.projects'));
-        }
+        $project = $this->require($this->projects->find($id));
 
         switch ($action) {
             case 'key':
@@ -152,5 +140,14 @@ final class ProjectsController
         }
 
         return Response::redirect(View::route('ui.projects.show', ['id' => $id]));
+    }
+    protected function listRoute(): string
+    {
+        return 'ui.projects';
+    }
+
+    protected function notFoundMessage(): string
+    {
+        return 'Проект не найден';
     }
 }

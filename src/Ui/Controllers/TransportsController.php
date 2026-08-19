@@ -16,7 +16,7 @@ use Throwable;
 /**
  * Транспорты в панели: список, создание, правка, проверка связи.
  */
-final class TransportsController
+final class TransportsController extends ResourceController
 {
     private TransportRepository $transports;
     private RateLimiter $limiter;
@@ -54,13 +54,7 @@ final class TransportsController
      */
     public function form(Request $request, ?int $id): Response
     {
-        $transport = $id !== null ? $this->transports->find($id) : null;
-
-        if ($id !== null && $transport === null) {
-            View::flash('Транспорт не найден', 'error');
-
-            return Response::redirect(View::route('ui.transports'));
-        }
+        $transport = $this->requireIfEditing($id, $id === null ? null : $this->transports->find($id));
 
         return Response::html(View::render('transport_form', [
             'active'    => 'transports',
@@ -149,13 +143,7 @@ final class TransportsController
      */
     public function action(Request $request, int $id, string $action): Response
     {
-        $transport = $this->transports->find($id);
-
-        if ($transport === null) {
-            View::flash('Транспорт не найден', 'error');
-
-            return Response::redirect(View::route('ui.transports'));
-        }
+        $transport = $this->require($this->transports->find($id));
 
         switch ($action) {
             case 'test':
@@ -190,5 +178,14 @@ final class TransportsController
         }
 
         return Response::redirect(View::route('ui.transports'));
+    }
+    protected function listRoute(): string
+    {
+        return 'ui.transports';
+    }
+
+    protected function notFoundMessage(): string
+    {
+        return 'Транспорт не найден';
     }
 }

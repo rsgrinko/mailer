@@ -236,3 +236,21 @@ test('на страницах панели есть скрытое поле с �
     assertContains('name="_token"', $body);
     assertContains(Mailer\Ui\Csrf::token(), $body);
 });
+
+test('несуществующая запись возвращает в список раздела', function (): void {
+    Config::set('ui.auth', false);
+
+    $kernel = new UiKernel();
+
+    foreach ([
+        '/ui/projects/999999'   => '/ui/projects',
+        '/ui/templates/999999'  => '/ui/templates',
+        '/ui/transports/999999' => '/ui/transports',
+        '/ui/users/999999'      => '/ui/users',
+    ] as $path => $back) {
+        $response = $kernel->handle(httpRequest('GET', $path));
+
+        assertSame(302, $response->status(), $path . ' должен уводить в список');
+        assertSame($back, $response->headers()['Location'] ?? '', 'вернуть должно на ' . $back);
+    }
+});

@@ -15,7 +15,7 @@ use Throwable;
 /**
  * Шаблоны писем: список, правка и предпросмотр с подстановкой переменных.
  */
-final class TemplatesController
+final class TemplatesController extends ResourceController
 {
     private TemplateRepository $templates;
     private Renderer $renderer;
@@ -54,13 +54,7 @@ final class TemplatesController
 
     public function form(Request $request, ?int $id): Response
     {
-        $template = $id !== null ? $this->templates->find($id) : null;
-
-        if ($id !== null && $template === null) {
-            View::flash('Шаблон не найден', 'error');
-
-            return Response::redirect(View::route('ui.templates'));
-        }
+        $template = $this->requireIfEditing($id, $id === null ? null : $this->templates->find($id));
 
         $variables = $template === null ? [] : $this->renderer->variables(
             (string) ($template['subject'] ?? ''),
@@ -116,13 +110,7 @@ final class TemplatesController
 
     public function action(Request $request, int $id, string $action): Response
     {
-        $template = $this->templates->find($id);
-
-        if ($template === null) {
-            View::flash('Шаблон не найден', 'error');
-
-            return Response::redirect(View::route('ui.templates'));
-        }
+        $template = $this->require($this->templates->find($id));
 
         if ($action === 'delete') {
             $this->templates->delete($id);
@@ -134,5 +122,14 @@ final class TemplatesController
         View::flash('Неизвестное действие: ' . $action, 'error');
 
         return Response::redirect(View::route('ui.templates.show', ['id' => $id]));
+    }
+    protected function listRoute(): string
+    {
+        return 'ui.templates';
+    }
+
+    protected function notFoundMessage(): string
+    {
+        return 'Шаблон не найден';
     }
 }

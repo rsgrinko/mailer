@@ -17,7 +17,7 @@ use Throwable;
 /**
  * Пользователи панели. Права у всех одинаковые, поэтому управлять ими может любой вошедший.
  */
-final class UsersController
+final class UsersController extends ResourceController
 {
     private UserRepository $users;
 
@@ -44,13 +44,7 @@ final class UsersController
 
     public function form(Request $request, ?int $id): Response
     {
-        $user = $id !== null ? $this->users->find($id) : null;
-
-        if ($id !== null && $user === null) {
-            View::flash('Пользователь не найден', 'error');
-
-            return Response::redirect(View::route('ui.users'));
-        }
+        $user = $this->requireIfEditing($id, $id === null ? null : $this->users->find($id));
 
         return Response::html(View::render('user_form', [
             'active'  => 'users',
@@ -117,13 +111,7 @@ final class UsersController
     public function action(Request $request, int $id, string $action): Response
     {
         $current = Auth::user();
-        $user    = $this->users->find($id);
-
-        if ($user === null) {
-            View::flash('Пользователь не найден', 'error');
-
-            return Response::redirect(View::route('ui.users'));
-        }
+        $user    = $this->require($this->users->find($id));
 
         try {
             if ($current !== null && (int) $current['id'] === $id && $action !== 'password') {
@@ -160,5 +148,14 @@ final class UsersController
         }
 
         return Response::redirect(View::route('ui.users'));
+    }
+    protected function listRoute(): string
+    {
+        return 'ui.users';
+    }
+
+    protected function notFoundMessage(): string
+    {
+        return 'Пользователь не найден';
     }
 }
