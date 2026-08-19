@@ -50,14 +50,22 @@ jobs:
           git checkout -q refs/ci/build
           git log -1 --format='%h %s'
 
+      # Расширения спрашиваем у самого PHP: `php -m | grep -q` в конвейере с pipefail
+      # роняет шаг на найденном расширении — grep выходит по первому совпадению,
+      # и php получает SIGPIPE
       - name: Проверить окружение
         shell: bash
         run: |
           set -e
           php -v
-          for ext in pdo_sqlite openssl mbstring json session; do
-            php -m | grep -qix "$ext" || { echo "В образе нет расширения $ext"; exit 1; }
-          done
+          php -m
+          php -r 'foreach (["pdo_sqlite", "openssl", "mbstring", "json", "session"] as $ext) {
+              if (!extension_loaded($ext)) {
+                  fwrite(STDERR, "В образе нет расширения " . $ext . PHP_EOL);
+                  exit(1);
+              }
+          }
+          echo "Расширения на месте" . PHP_EOL;'
 
       - name: Синтаксис
         shell: bash
