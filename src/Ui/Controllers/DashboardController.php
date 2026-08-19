@@ -34,14 +34,20 @@ final class DashboardController
     private ProjectRepository $projects;
     private WebhookRepository $webhooks;
 
-    public function __construct()
-    {
-        $this->messages   = new MessageRepository();
-        $this->events     = new EventRepository();
-        $this->settings   = new SettingRepository();
-        $this->transports = new TransportRepository();
-        $this->projects   = new ProjectRepository();
-        $this->webhooks   = new WebhookRepository();
+    public function __construct(
+        MessageRepository $messages,
+        EventRepository $events,
+        SettingRepository $settings,
+        TransportRepository $transports,
+        ProjectRepository $projects,
+        WebhookRepository $webhooks
+    ) {
+        $this->messages   = $messages;
+        $this->events     = $events;
+        $this->settings   = $settings;
+        $this->transports = $transports;
+        $this->projects   = $projects;
+        $this->webhooks   = $webhooks;
     }
 
     /**
@@ -73,7 +79,7 @@ final class DashboardController
         $migrator = new Migrator($db);
         $limiter  = new RateLimiter($db);
 
-        $counters = $db->select('SELECT * FROM counters ORDER BY counter_key');
+        $counters = $limiter->all();
 
         return Response::html(View::render('system', [
             'active'    => 'system',
@@ -125,7 +131,7 @@ final class DashboardController
                 break;
 
             case 'reset-counters':
-                $db->execute('DELETE FROM counters');
+                (new RateLimiter($db))->resetAll();
                 View::flash('Счётчики лимитов сброшены');
                 break;
 
@@ -249,7 +255,7 @@ final class DashboardController
         $result = [];
 
         foreach ($tables as $table) {
-            $result[$table] = $db->hasTable($table) ? (int) $db->value('SELECT COUNT(*) FROM ' . $table) : 0;
+            $result[$table] = $db->count($table);
         }
 
         return $result;

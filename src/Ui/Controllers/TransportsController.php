@@ -21,10 +21,12 @@ final class TransportsController
     private TransportRepository $transports;
     private RateLimiter $limiter;
 
-    public function __construct()
-    {
-        $this->transports = new TransportRepository();
-        $this->limiter    = new RateLimiter();
+    public function __construct(
+        TransportRepository $transports,
+        RateLimiter $limiter
+    ) {
+        $this->transports = $transports;
+        $this->limiter    = $limiter;
     }
 
     public function index(Request $request): Response

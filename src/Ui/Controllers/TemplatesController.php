@@ -20,10 +20,12 @@ final class TemplatesController
     private TemplateRepository $templates;
     private Renderer $renderer;
 
-    public function __construct()
-    {
-        $this->templates = new TemplateRepository();
-        $this->renderer  = new Renderer();
+    public function __construct(
+        TemplateRepository $templates,
+        Renderer $renderer
+    ) {
+        $this->templates = $templates;
+        $this->renderer  = $renderer;
     }
 
     public function index(Request $request): Response

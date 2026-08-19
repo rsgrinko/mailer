@@ -24,12 +24,16 @@ final class ProjectsController
     private MessageRepository $messages;
     private RateLimiter $limiter;
 
-    public function __construct()
-    {
-        $this->projects   = new ProjectRepository();
-        $this->transports = new TransportRepository();
-        $this->messages   = new MessageRepository();
-        $this->limiter    = new RateLimiter();
+    public function __construct(
+        ProjectRepository $projects,
+        TransportRepository $transports,
+        MessageRepository $messages,
+        RateLimiter $limiter
+    ) {
+        $this->projects   = $projects;
+        $this->transports = $transports;
+        $this->messages   = $messages;
+        $this->limiter    = $limiter;
     }
 
     public function index(Request $request): Response

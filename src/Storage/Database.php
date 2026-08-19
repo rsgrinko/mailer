@@ -314,6 +314,14 @@ final class Database
     /**
      * Есть ли таблица в базе.
      */
+    /**
+     * Сколько строк в таблице. Нет таблицы — ноль: панель показывает это на состоянии.
+     */
+    public function count(string $table): int
+    {
+        return $this->hasTable($table) ? (int) $this->value('SELECT COUNT(*) FROM ' . $table) : 0;
+    }
+
     public function hasTable(string $table): bool
     {
         if ($this->isSqlite()) {

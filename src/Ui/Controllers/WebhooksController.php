@@ -20,10 +20,12 @@ final class WebhooksController
     private WebhookRepository $webhooks;
     private ProjectRepository $projects;
 
-    public function __construct()
-    {
-        $this->webhooks = new WebhookRepository();
-        $this->projects = new ProjectRepository();
+    public function __construct(
+        WebhookRepository $webhooks,
+        ProjectRepository $projects
+    ) {
+        $this->webhooks = $webhooks;
+        $this->projects = $projects;
     }
 
     public function index(Request $request): Response

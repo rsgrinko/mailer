@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Http;
 
+use Mailer\Support\Container;
 use Mailer\Support\MailerException;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
@@ -247,7 +248,7 @@ final class Router
     private function call(mixed $handler, Request $request, array $params): Response
     {
         if (is_array($handler) && is_string($handler[0])) {
-            $controller = new $handler[0]();
+            $controller = Container::instance()->make($handler[0]);
             $method     = new ReflectionMethod($controller, $handler[1]);
 
             /** @var Response $response */

@@ -46,3 +46,20 @@ test('неизвестная команда отвечает подсказко�
     assertSame(1, $code);
     assertContains('Неизвестная команда', $output);
 });
+
+test('контейнер собирает контроллер с его зависимостями', function (): void {
+    $container = new Mailer\Support\Container();
+
+    $controller = $container->make(Mailer\Ui\Controllers\ProjectsController::class);
+    assertTrue($controller instanceof Mailer\Ui\Controllers\ProjectsController);
+
+    // Один и тот же репозиторий переиспользуется, а не создаётся заново
+    $first  = $container->make(Mailer\Repository\ProjectRepository::class);
+    $second = $container->make(Mailer\Repository\ProjectRepository::class);
+    assertTrue($first === $second, 'репозиторий должен быть общим');
+
+    // Готовый объект можно подложить — на этом держатся будущие тесты контроллеров
+    $fake = new Mailer\Repository\TemplateRepository();
+    $container->set(Mailer\Repository\TemplateRepository::class, $fake);
+    assertTrue($container->make(Mailer\Repository\TemplateRepository::class) === $fake);
+});

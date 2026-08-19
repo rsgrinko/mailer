@@ -35,16 +35,24 @@ final class MessagesController
     private Queue $queue;
     private MailService $service;
 
-    public function __construct()
-    {
-        $this->messages   = new MessageRepository();
-        $this->events     = new EventRepository();
-        $this->projects   = new ProjectRepository();
-        $this->transports = new TransportRepository();
-        $this->templates  = new TemplateRepository();
-        $this->webhooks   = new WebhookRepository();
-        $this->queue      = new Queue();
-        $this->service    = new MailService();
+    public function __construct(
+        MessageRepository $messages,
+        EventRepository $events,
+        ProjectRepository $projects,
+        TransportRepository $transports,
+        TemplateRepository $templates,
+        WebhookRepository $webhooks,
+        Queue $queue,
+        MailService $service
+    ) {
+        $this->messages   = $messages;
+        $this->events     = $events;
+        $this->projects   = $projects;
+        $this->transports = $transports;
+        $this->templates  = $templates;
+        $this->webhooks   = $webhooks;
+        $this->queue      = $queue;
+        $this->service    = $service;
     }
 
     /**

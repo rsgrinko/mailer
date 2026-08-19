@@ -21,9 +21,10 @@ final class UsersController
 {
     private UserRepository $users;
 
-    public function __construct()
-    {
-        $this->users = new UserRepository();
+    public function __construct(
+        UserRepository $users
+    ) {
+        $this->users = $users;
     }
 
     public function index(Request $request): Response

@@ -22,12 +22,16 @@ final class MessagesController
     private EventRepository $events;
     private Queue $queue;
 
-    public function __construct()
-    {
-        $this->service  = new MailService();
-        $this->messages = new MessageRepository();
-        $this->events   = new EventRepository();
-        $this->queue    = new Queue();
+    public function __construct(
+        MailService $service,
+        MessageRepository $messages,
+        EventRepository $events,
+        Queue $queue
+    ) {
+        $this->service  = $service;
+        $this->messages = $messages;
+        $this->events   = $events;
+        $this->queue    = $queue;
     }
 
     /**

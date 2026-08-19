@@ -110,6 +110,24 @@ final class RateLimiter
     }
 
     /**
+     * Все счётчики — панель показывает их на странице состояния.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function all(): array
+    {
+        return $this->db->select('SELECT * FROM counters ORDER BY counter_key');
+    }
+
+    /**
+     * Снести все счётчики разом (кнопка «сбросить лимиты»).
+     */
+    public function resetAll(): int
+    {
+        return $this->db->execute('DELETE FROM counters');
+    }
+
+    /**
      * Сбросить конкретный счётчик (кнопка в панели).
      */
     public function reset(string $key): void

@@ -20,9 +20,9 @@ final class AuthController
     private UserRepository $users;
     private Logger $logger;
 
-    public function __construct()
+    public function __construct(UserRepository $users)
     {
-        $this->users  = new UserRepository();
+        $this->users  = $users;
         $this->logger = new Logger('ui');
     }
 
