@@ -1,10 +1,10 @@
 # Мини-SDK для PHP-проектов
 
-SDK — один файл `sdk/MailerClient.php` без зависимостей. Скопируйте его к себе в проект
+SDK — один файл `integrations/php-sdk/MailerClient.php` без зависимостей. Скопируйте его к себе в проект
 (или подключите по пути к сервису) и работайте.
 
 ```php
-require '/путь/к/mailer/sdk/MailerClient.php';
+require '/путь/к/mailer/integrations/php-sdk/MailerClient.php';
 
 use Mailer\Sdk\Client;
 use Mailer\Sdk\Mail;
@@ -124,7 +124,7 @@ if ($status['message']['status'] === 'failed') {
 
 ## Примеры
 
-В каталоге `sdk/examples`:
+В каталоге `integrations/php-sdk/examples`:
 
 - `basic.php` — простое письмо;
 - `template.php` — письмо по шаблону;

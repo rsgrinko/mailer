@@ -42,7 +42,7 @@ php bin/mailer worker                              # воркер очереди
 Из PHP-проекта — через мини-SDK (один файл, `require` и всё):
 
 ```php
-require '/путь/к/mailer/sdk/MailerClient.php';
+require '/путь/к/mailer/integrations/php-sdk/MailerClient.php';
 
 use Mailer\Sdk\Client;
 use Mailer\Sdk\Mail;
@@ -74,6 +74,9 @@ sendmail_path = /var/www/mailer/bin/mailer-sendmail -t -i
 
 Или через локальный SMTP-релей: в настройках приложения указывается `127.0.0.1:2525`.
 
+Для DokuWiki есть готовый плагин: `integrations/dokuwiki/mailerservice` копируется в
+`lib/plugins/` вики, после чего вся её почта уходит через сервис.
+
 ## Документация
 
 - [docs/API.md](docs/API.md) — HTTP API: адреса, поля, ответы, ошибки.
@@ -90,13 +93,13 @@ PHP 8.1+ с расширениями `pdo_sqlite` (или `pdo_mysql`), `openssl
 ## Структура
 
 ```
-bin/       консольные утилиты: mailer, mailer-sendmail, mailer-send
-config/    настройки (читают .env)
-public/    единая точка входа: /api/v1 и /ui
-sdk/       мини-SDK и примеры
-src/       код сервиса
-tests/     тесты (php bin/mailer test)
-deploy/    конфиги nginx и systemd
-docs/      документация
-var/       база, логи, вложения — в репозиторий не попадает
+bin/           консольные утилиты: mailer, mailer-sendmail, mailer-send
+config/        настройки (читают .env)
+public/        единая точка входа: /api/v1 и /ui
+integrations/  код для клиентских проектов: php-sdk, плагин DokuWiki
+src/           код сервиса
+tests/         тесты (php bin/mailer test)
+deploy/        конфиги nginx и systemd
+docs/          документация
+var/           база, логи, вложения — в репозиторий не попадает
 ```

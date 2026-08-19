@@ -1,0 +1,7 @@
+base   mailerservice
+author Роман Гринько
+email  rsgrinko@gmail.com
+date   2026-08-19
+name   Mailer Service
+desc   Отправка почты DokuWiki через сервис рассылки (HTTP API вместо mail())
+url    https://github.com/rsgrinko/mailer

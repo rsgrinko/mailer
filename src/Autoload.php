@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Отображение пространств имён на каталоги:
  *   Mailer\      -> src/
- *   Mailer\Sdk\  -> sdk/
+ *   Mailer\Sdk\  -> integrations/php-sdk/
  */
 
 if (!defined('MAILER_ROOT')) {
@@ -17,7 +17,7 @@ if (!defined('MAILER_ROOT')) {
 spl_autoload_register(static function (string $class): void {
     // SDK — один самодостаточный файл, в нём сразу все свои классы
     if (str_starts_with($class, 'Mailer\\Sdk\\')) {
-        require_once MAILER_ROOT . '/sdk/MailerClient.php';
+        require_once MAILER_ROOT . '/integrations/php-sdk/MailerClient.php';
 
         return;
     }

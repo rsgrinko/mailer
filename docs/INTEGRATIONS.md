@@ -159,11 +159,30 @@ await fetch('http://mail.internal/api/v1/messages', {
 });
 ```
 
+## 4. DokuWiki — плагин
+
+Для вики на DokuWiki есть готовый плагин: `integrations/dokuwiki/mailerservice`.
+Он перехватывает событие `MAIL_MESSAGE_SEND` и отдаёт сервису собранное вики письмо
+целиком (полем `raw`), поэтому шаблоны, вложения и заголовки DokuWiki не меняются.
+
+```bash
+cp -r integrations/dokuwiki/mailerservice /var/www/dokuwiki/lib/plugins/
+php bin/mailer key:create dokuwiki
+```
+
+Дальше в вики: **Управление → Настройки**, раздел «Плагин mailerservice» — адрес сервиса,
+API-ключ, режим (`queue` или `sync`), транспорт, метка, запасная отправка. Проверка и
+тестовое письмо — на странице **Управление → Сервис рассылки**.
+
+Отправитель берётся из настройки вики `mailfrom`, он должен быть разрешён транспорту.
+Подробности — в `integrations/dokuwiki/mailerservice/README.md`.
+
 ## Что выбрать
 
 | Ситуация | Способ |
 |----------|--------|
 | Свой PHP-проект | SDK |
+| DokuWiki | плагин `mailerservice` |
 | Старое PHP-приложение, код трогать нельзя | подмена sendmail |
 | Приложение на другом языке с настройками SMTP | локальный релей |
 | Скрипты, cron, CI | `bin/mailer-send` или curl |
