@@ -25,7 +25,7 @@ jobs:
       - name: Забрать код
         shell: bash
         env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITEA_TOKEN: ${{ github.token }}
         run: |
           set -e
           git config --global --add safe.directory '*'
