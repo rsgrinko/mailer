@@ -81,6 +81,7 @@ bin/mailer-send      shell-утилита отправки через HTTP API
 integrations/        всё, что ставится на сторону клиента, а не сервиса:
   php-sdk/           мини-SDK для PHP-проектов (один файл) + примеры
   dokuwiki/          плагин mailerservice для вики на DokuWiki
+  wordpress/         плагин mailerservice для WordPress (wp_mail через сервис)
 tests/               собственный мини-тестраннер (без PHPUnit) и тесты
 deploy/              nginx.conf, systemd-юниты, шпаргалки по установке
 docs/                документация: API, SDK, интеграции, деплой, эксплуатация

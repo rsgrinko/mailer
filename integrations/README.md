@@ -7,6 +7,7 @@
 |---------|---------|
 | `php-sdk/` | мини-SDK для PHP-проектов: один файл `MailerClient.php` и примеры |
 | `dokuwiki/mailerservice/` | плагин DokuWiki: вся почта вики уходит через сервис |
+| `wordpress/mailerservice/` | плагин WordPress: вся почта сайта (`wp_mail`) уходит через сервис |
 
 Документация: [docs/SDK.md](../docs/SDK.md) и [docs/INTEGRATIONS.md](../docs/INTEGRATIONS.md).
 
