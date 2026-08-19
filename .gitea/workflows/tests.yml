@@ -19,13 +19,21 @@ jobs:
       image: php:8.3-cli
 
     steps:
+      # В образе php git не установлен, а без него нечем забрать код
+      - name: Поставить git
+        shell: bash
+        run: |
+          set -e
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git
+
       # Готовые actions (actions/checkout и прочие) написаны на JS и требуют node
       # внутри контейнера. Ставить node в php-образ или брать образ потолще — значит
       # держать на раннере второй образ, поэтому код забираем обычным git.
       - name: Забрать код
         shell: bash
         env:
-          GITEA_TOKEN: ${{ github.token }}
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
         run: |
           set -e
           git config --global --add safe.directory '*'
@@ -34,8 +42,8 @@ jobs:
 
           # Приватный репозиторий отдаётся только по токену, публичный — и без него
           if [ -n "$GITEA_TOKEN" ]; then
-            git config --local http.extraheader \
-              "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITEA_TOKEN" | base64 | tr -d '\n')"
+            header=$(printf 'x-access-token:%s' "$GITEA_TOKEN" | base64 | tr -d '\n')
+            git config --local http.extraheader "AUTHORIZATION: basic $header"
           fi
 
           git fetch --depth=1 --no-tags origin "+${GITHUB_REF}:refs/ci/build"
@@ -55,8 +63,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          find . -name '*.php' -not -path './var/*' -print0 \
-            | xargs -0 -n1 -P4 php -l > /dev/null
+          find . -name '*.php' -not -path './var/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
 
       - name: Тесты
         shell: bash
