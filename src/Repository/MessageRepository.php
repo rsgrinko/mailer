@@ -184,7 +184,27 @@ final class MessageRepository
      */
     public function paginate(array $filters = [], int $page = 1, int $perPage = 30): array
     {
-        [$where, $params] = $this->buildWhere($filters);
+        $result = $this->search($filters, $page, $perPage, $this->hasFulltextIndex());
+
+        // Полнотекстовый индекс ищет слова целиком и их начала, поэтому «mail» не найдёт
+        // «gmail.com». Если по словам нашлось меньше страницы, повторяем перебором —
+        // пользователь получает полный ответ, а быстрый путь остаётся для широких запросов.
+        if (!empty($filters['search']) && $result['total'] < $perPage && $this->hasFulltextIndex()) {
+            return $this->search($filters, $page, $perPage, false);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Выборка страницы с указанным способом поиска.
+     *
+     * @param array<string, mixed> $filters
+     * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
+     */
+    private function search(array $filters, int $page, int $perPage, bool $fulltext): array
+    {
+        [$where, $params] = $this->buildWhere($filters, $fulltext);
 
         $total = (int) $this->db->value('SELECT COUNT(*) FROM messages ' . $where, $params);
 
@@ -315,7 +335,7 @@ final class MessageRepository
      * @param array<string, mixed> $filters
      * @return array{0: string, 1: array<string, mixed>}
      */
-    private function buildWhere(array $filters): array
+    private function buildWhere(array $filters, bool $fulltext = false): array
     {
         $conditions = [];
         $params     = [];
@@ -346,7 +366,7 @@ final class MessageRepository
         }
 
         if (!empty($filters['search'])) {
-            [$condition, $searchParams] = self::searchCondition((string) $filters['search'], $this->hasFulltextIndex());
+            [$condition, $searchParams] = self::searchCondition((string) $filters['search'], $fulltext);
 
             $conditions[] = $condition;
             $params       = array_merge($params, $searchParams);
