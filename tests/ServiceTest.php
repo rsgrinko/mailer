@@ -225,3 +225,32 @@ test('если все транспорты цепочки упали, ошибк
     assertTrue($error instanceof TransportException);
     assertTrue($error->isTemporary());
 });
+
+test('старые логи удаляются, сегодняшний остаётся', function (): void {
+    $dir = MAILER_ROOT . '/var/tmp/logs-test-' . getmypid();
+    @mkdir($dir, 0775, true);
+
+    $today = $dir . '/mailer-' . date('Y-m-d') . '.log';
+    $old   = $dir . '/mailer-' . date('Y-m-d', strtotime('-40 days')) . '.log';
+    $fresh = $dir . '/mailer-' . date('Y-m-d', strtotime('-3 days')) . '.log';
+
+    foreach ([$today, $old, $fresh] as $file) {
+        file_put_contents($file, 'строка лога');
+    }
+
+    // Возраст определяется по времени изменения файла
+    touch($old, strtotime('-40 days'));
+    touch($fresh, strtotime('-3 days'));
+
+    $logger  = new Mailer\Support\Logger('test', $dir);
+    $removed = $logger->purge(30);
+
+    assertSame([basename($old)], $removed);
+    assertTrue(is_file($today), 'сегодняшний лог трогать нельзя');
+    assertTrue(is_file($fresh), 'свежий лог остаётся');
+
+    assertSame([], $logger->purge(0), 'ноль дней — чистка выключена');
+
+    array_map('unlink', (array) glob($dir . '/*.log'));
+    @rmdir($dir);
+});

@@ -25,6 +25,7 @@ use Mailer\Storage\Database;
 use Mailer\Storage\Migrator;
 use Mailer\Support\Config;
 use Mailer\Support\Env;
+use Mailer\Support\Logger;
 use Mailer\Support\Str;
 use Mailer\Transport\TransportFactory;
 use Mailer\Webhook\WebhookSender;
@@ -91,6 +92,7 @@ final class Application
                 'send'      => $this->send(),
 
                 'route:list' => $this->routeList(),
+                'logs:purge' => $this->logsPurge(),
 
                 'test' => $this->runTests(),
 
@@ -131,6 +133,7 @@ final class Application
         $this->line('  queue:purge [--status=sent] [--days=30]   удалить старые письма');
         $this->line('  webhook:process                разослать накопившиеся вебхуки');
         $this->line('  route:list [строка]            карта адресов сервиса');
+        $this->line('  logs:purge [--days=30]          удалить старые файлы логов');
         $this->line('');
         $this->line('Проекты и ключи:');
         $this->line('  key:create <имя> [--transport=] [--limit-day=] [--webhook=]');
@@ -938,6 +941,28 @@ final class Application
         $this->line('Письмо ' . $result['uuid'] . ': ' . $result['status']);
         if (isset($result['info'])) {
             $this->line($result['info']);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Убирает старые файлы логов. По умолчанию срок берётся из LOG_KEEP_DAYS.
+     */
+    private function logsPurge(): int
+    {
+        $days    = isset($this->options['days']) ? (int) $this->options['days'] : null;
+        $removed = (new Logger('cli'))->purge($days);
+
+        if ($removed === []) {
+            $this->line('Удалять нечего.');
+
+            return 0;
+        }
+
+        $this->line('Удалено файлов: ' . count($removed));
+        foreach ($removed as $name) {
+            $this->line('  ' . $name);
         }
 
         return 0;

@@ -52,6 +52,8 @@ return [
         'level' => Env::string('LOG_LEVEL', 'info'),
         // Писать ли в лог диалог с SMTP-сервером (полезно при отладке, шумно в проде)
         'smtp_conversation' => Env::bool('LOG_SMTP', false),
+        // Сколько дней держать файлы логов (0 — не чистить)
+        'keep_days' => Env::int('LOG_KEEP_DAYS', 30),
     ],
 
     // Очередь и повторные попытки

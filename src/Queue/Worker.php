@@ -43,6 +43,9 @@ final class Worker
     /** Время старта: запросы на перезапуск, сделанные раньше, нас не касаются */
     private int $startedAt;
 
+    /** Когда в последний раз чистили логи — чаще раза в сутки незачем */
+    private int $logsPurgedAt = 0;
+
     public function __construct(?Database $db = null, ?callable $output = null)
     {
         $db = $db ?? Database::instance();
@@ -105,6 +108,7 @@ final class Worker
                     $this->say('Вернули в очередь зависших писем: ' . $stuck);
                 }
                 $this->limiter->cleanup();
+                $this->purgeLogs();
             }
             $tick++;
 
@@ -170,6 +174,23 @@ final class Worker
         $requested = $this->settings->get(self::RESTART_KEY);
 
         return $requested !== null && (int) $requested > $this->startedAt;
+    }
+
+    /**
+     * Раз в сутки убирает старые файлы логов: иначе var/log растёт бесконечно.
+     */
+    private function purgeLogs(): void
+    {
+        if (time() - $this->logsPurgedAt < 86400) {
+            return;
+        }
+
+        $this->logsPurgedAt = time();
+        $removed            = $this->logger->purge();
+
+        if ($removed !== []) {
+            $this->logger->info('Удалены старые логи', ['files' => $removed]);
+        }
     }
 
     /**

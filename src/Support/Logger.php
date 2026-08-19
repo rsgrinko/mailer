@@ -117,6 +117,39 @@ final class Logger
     }
 
     /**
+     * Удаляет логи старше указанного числа дней. Возвращает имена удалённых файлов.
+     *
+     * Ноль дней означает «не чистить»: логи иногда держат специально, а сегодняшний
+     * файл не трогаем в любом случае — в него как раз идёт запись.
+     *
+     * @return array<int, string>
+     */
+    public function purge(?int $days = null): array
+    {
+        $days = $days ?? (int) Config::get('log.keep_days', 30);
+
+        if ($days <= 0) {
+            return [];
+        }
+
+        $edge    = strtotime('-' . $days . ' days');
+        $today   = $this->dir . '/mailer-' . date('Y-m-d') . '.log';
+        $removed = [];
+
+        foreach ($this->files() as $file) {
+            if ($file['mtime'] >= $edge || $file['path'] === $today) {
+                continue;
+            }
+
+            if (@unlink($file['path'])) {
+                $removed[] = $file['name'];
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
      * Последние $lines строк файла лога (для веб-панели).
      */
     public function tail(string $fileName, int $lines = 300): string
