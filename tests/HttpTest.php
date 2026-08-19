@@ -1,0 +1,206 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Сквозные проверки HTTP: поднимаем настоящие ядра и ходим по всем маршрутам,
+ * как это делает браузер. Ловят ровно то, что ломается при рефакторинге, —
+ * забытое имя маршрута, отвалившуюся прослойку, ошибку во вьюхе.
+ */
+
+use Mailer\Http\ApiKernel;
+use Mailer\Http\Request;
+use Mailer\Http\Response;
+use Mailer\Http\Router;
+use Mailer\Repository\ProjectRepository;
+use Mailer\Repository\TemplateRepository;
+use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
+use Mailer\MailService;
+use Mailer\Support\Config;
+use Mailer\Ui\UiKernel;
+
+/**
+ * Запрос к сервису.
+ *
+ * @param array<string, string> $headers
+ * @param array<string, mixed>  $body
+ * @param array<string, mixed>  $query
+ */
+function httpRequest(string $method, string $path, array $headers = [], array $body = [], array $query = []): Request
+{
+    $request           = new Request();
+    $request->method   = strtoupper($method);
+    $request->path     = rtrim($path, '/') === '' ? '/' : rtrim($path, '/');
+    $request->query    = $query;
+    $request->headers  = $headers;
+    $request->rawBody  = $body === [] ? '' : (string) json_encode($body);
+    $request->body     = $body;
+
+    return $request;
+}
+
+/**
+ * Данные, на которых гоняем страницы: проект с ключом, транспорт, шаблон, пользователь, письмо.
+ *
+ * @return array<string, mixed>
+ */
+function httpFixtures(): array
+{
+    static $fixtures = null;
+
+    if ($fixtures !== null) {
+        return $fixtures;
+    }
+
+    $created = (new ProjectRepository())->create(['name' => 'http-тест']);
+    $project = $created['project'];
+    $key     = $created['key'];
+
+    $transport = (new TransportRepository())->create([
+        'name'     => 'http-тест-null',
+        'type'     => 'null',
+        'settings' => [],
+        'active'   => 1,
+    ]);
+
+    $template = (new TemplateRepository())->create([
+        'name'    => 'http-тест-шаблон',
+        'subject' => 'Привет, {{ name }}',
+        'text'    => 'Тело письма',
+    ]);
+
+    $user = (new UserRepository())->create([
+        'login'    => 'http-test',
+        'password' => 'секрет123',
+        'name'     => 'Проверка',
+    ]);
+
+    $accepted = (new MailService())->accept([
+        'to'        => 'user@example.com',
+        'subject'   => 'Письмо для проверки страниц',
+        'text'      => 'Текст',
+        'transport' => 'http-тест-null',
+        'sync'      => true,
+    ], $project);
+
+    $message = (array) (new Mailer\Repository\MessageRepository())->find((int) $accepted['id']);
+
+    $fixtures = [
+        'key'       => $key,
+        'project'   => (int) $project['id'],
+        'transport' => $transport,
+        'template'  => $template,
+        'user'      => (int) $user['id'],
+        'message'   => (int) $message['id'],
+        'uuid'      => (string) $message['uuid'],
+    ];
+
+    return $fixtures;
+}
+
+test('все GET-страницы панели открываются', function (): void {
+    Config::set('ui.auth', false);
+
+    $ids    = httpFixtures();
+    $kernel = new UiKernel();
+
+    $router = new Router();
+    $router->load(MAILER_ROOT . '/routes/ui.php');
+
+    $checked = 0;
+
+    foreach ($router->routes() as $route) {
+        // Заглушку 404 и скачивание вложения проверяем отдельно: у образца вложений нет
+        if (!$route->allows('GET') || str_contains($route->pattern, '{path') || str_ends_with($route->pattern, '/attachment')) {
+            continue;
+        }
+
+        $path = str_replace(
+            ['{id:\d+}', '{action}'],
+            [(string) $ids['message'], 'send'],
+            $route->pattern
+        );
+
+        // Идентификаторы у каждого раздела свои
+        foreach (['transports' => 'transport', 'projects' => 'project', 'templates' => 'template', 'users' => 'user'] as $section => $key) {
+            if (str_starts_with($route->pattern, '/ui/' . $section)) {
+                $path = str_replace((string) $ids['message'], (string) $ids[$key], $path);
+            }
+        }
+
+        $response = $kernel->handle(httpRequest('GET', $path));
+        $checked++;
+
+        assertSame(200, $response->status(), 'страница ' . $path . ' должна открываться');
+        assertTrue(
+            !str_contains($response->body(), 'Что-то пошло не так'),
+            'страница ' . $path . ' отдала страницу ошибки'
+        );
+    }
+
+    assertTrue($checked >= 15, 'проверено страниц: ' . $checked);
+
+    // У письма без вложений скачивать нечего
+    assertSame(404, $kernel->handle(httpRequest('GET', '/ui/messages/' . $ids['message'] . '/attachment', [], [], ['index' => 0]))->status());
+
+    // Сырое письмо отдаётся файлом
+    $raw = $kernel->handle(httpRequest('GET', '/ui/messages/' . $ids['message'] . '/raw'));
+    assertSame(200, $raw->status());
+    assertContains('Subject:', $raw->body());
+});
+
+test('панель не пускает неизвестный адрес и чужой метод', function (): void {
+    Config::set('ui.auth', false);
+
+    $kernel = new UiKernel();
+
+    assertSame(404, $kernel->handle(httpRequest('GET', '/ui/такой-страницы-нет'))->status());
+    assertSame(405, $kernel->handle(httpRequest('DELETE', '/ui/messages'))->status());
+});
+
+test('API отвечает на все свои маршруты', function (): void {
+    $ids    = httpFixtures();
+    $kernel = new ApiKernel();
+    $auth   = ['authorization' => 'Bearer ' . $ids['key']];
+
+    // Мониторинг ходит без ключа
+    assertSame(200, $kernel->handle(httpRequest('GET', '/api/v1/health'))->status());
+
+    // Без ключа и с неверным ключом — 401
+    assertSame(401, $kernel->handle(httpRequest('GET', '/api/v1/messages'))->status());
+    assertSame(401, $kernel->handle(httpRequest('GET', '/api/v1/messages', ['authorization' => 'Bearer нет']))->status());
+
+    assertSame(200, $kernel->handle(httpRequest('GET', '/api/v1/messages', $auth))->status());
+    assertSame(200, $kernel->handle(httpRequest('GET', '/api/v1/templates', $auth))->status());
+    assertSame(200, $kernel->handle(httpRequest('GET', '/api/v1/messages/' . $ids['uuid'], $auth))->status());
+
+    $created = $kernel->handle(httpRequest('POST', '/api/v1/messages', $auth, [
+        'to'        => 'user@example.com',
+        'subject'   => 'Письмо через API',
+        'text'      => 'Текст',
+        'transport' => 'http-тест-null',
+    ]));
+
+    assertSame(202, $created->status());
+
+    $id = (string) (json_decode($created->body(), true)['id'] ?? '');
+    assertTrue($id !== '', 'API должен вернуть идентификатор письма');
+
+    // Письмо ещё в очереди: отменяем, возвращаем и отменяем снова — очередь после теста пустая
+    assertSame(200, $kernel->handle(httpRequest('DELETE', '/api/v1/messages/' . $id, $auth))->status());
+    assertSame(200, $kernel->handle(httpRequest('POST', '/api/v1/messages/' . $id . '/retry', $auth))->status());
+    assertSame(200, $kernel->handle(httpRequest('DELETE', '/api/v1/messages/' . $id, $auth))->status());
+});
+
+test('данные запроса не прошли проверку — 422, а не 500', function (): void {
+    $ids    = httpFixtures();
+    $kernel = new ApiKernel();
+
+    $response = $kernel->handle(httpRequest('POST', '/api/v1/messages', ['authorization' => 'Bearer ' . $ids['key']], [
+        'subject' => 'Без получателя',
+    ]));
+
+    assertSame(422, $response->status());
+    assertContains('to', $response->body());
+});
