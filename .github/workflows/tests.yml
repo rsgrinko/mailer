@@ -1,0 +1,53 @@
+name: Тесты
+
+# То же, что и в .gitea/workflows/tests.yml, но для GitHub.
+# Gitea читает свой каталог и этот файл не трогает, так что прогон не задваивается.
+#
+# Отличие одно: здесь код забирает actions/checkout. Раннеры GitHub одноразовые,
+# место на диске экономить не для кого, а node в контейнер подкладывает сам GitHub;
+# git в образе php нет, и checkout скачает код через REST API.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Тесты
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3-cli
+
+    steps:
+      - name: Забрать код
+        uses: actions/checkout@v4
+
+      # Расширения спрашиваем у самого PHP: `php -m | grep -q` в конвейере с pipefail
+      # роняет шаг на найденном расширении — grep выходит по первому совпадению,
+      # и php получает SIGPIPE
+      - name: Проверить окружение
+        shell: bash
+        run: |
+          set -e
+          php -v
+          php -m
+          php -r 'foreach (["pdo_sqlite", "openssl", "mbstring", "json", "session"] as $ext) {
+              if (!extension_loaded($ext)) {
+                  fwrite(STDERR, "В образе нет расширения " . $ext . PHP_EOL);
+                  exit(1);
+              }
+          }
+          echo "Расширения на месте" . PHP_EOL;'
+
+      - name: Синтаксис
+        shell: bash
+        run: |
+          set -e
+          find . -name '*.php' -not -path './var/*' -print0 | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Тесты
+        shell: bash
+        run: php bin/mailer test

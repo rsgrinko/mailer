@@ -88,6 +88,7 @@ tools/               инструменты разработки: loadtest.php �
 tests/               собственный мини-тестраннер (без PHPUnit) и тесты
 deploy/              nginx.conf, systemd-юниты, шпаргалки по установке
 .gitea/workflows/    сборка в Gitea Actions: пока только прогон тестов
+.github/workflows/   то же самое для зеркала на GitHub
 docs/                документация: API, SDK, интеграции, деплой, эксплуатация,
                      LOADTEST.md — замеры и узкие места, CI.md — сборка
 var/                 runtime: SQLite-база, логи, spool вложений, .eml из log-транспорта
@@ -289,8 +290,8 @@ php bin/mailer test                  мини-тестраннер
 backoff, rate limit, шаблоны, роутер. Транспорты в тестах — `null`/`log`, реальная сеть не
 используется.
 
-Тесты гоняются в Gitea Actions на каждый push и pull request: `.gitea/workflows/tests.yml`,
-подробности — `docs/CI.md`. Весь CI живёт в одном образе `php:8.3-cli` и обходится без
+Тесты гоняются на каждый push и pull request в Gitea Actions (`.gitea/workflows/tests.yml`)
+и на зеркале в GitHub Actions (`.github/workflows/tests.yml`), подробности — `docs/CI.md`. Весь CI живёт в одном образе `php:8.3-cli` и обходится без
 готовых actions, чтобы на раннере не копились образы. Новая проверка — ещё один шаг в том
 же job, а не новый job.
 
