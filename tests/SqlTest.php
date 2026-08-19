@@ -75,3 +75,35 @@ test('постраничная выборка считает записи и н�
     assertSame(1, $projects->paginate(0, 2)['page']);
     assertSame(1, $projects->paginate(-5, 2)['page']);
 });
+
+test('оборванное соединение с MySQL поднимается заново', function (): void {
+    // Тесты идут на sqlite в памяти, поэтому подключение к MySQL собираем сами из .env
+    if (Mailer\Support\Env::string('DB_DRIVER', 'sqlite') !== 'mysql') {
+        skipTest('проверка только для MySQL (DB_DRIVER=mysql в .env)');
+    }
+
+    $config = [
+        'host'     => Mailer\Support\Env::string('DB_HOST', '127.0.0.1'),
+        'port'     => Mailer\Support\Env::int('DB_PORT', 3306),
+        'database' => Mailer\Support\Env::string('DB_DATABASE', 'mailer'),
+        'username' => Mailer\Support\Env::string('DB_USERNAME', ''),
+        'password' => Mailer\Support\Env::string('DB_PASSWORD', ''),
+    ];
+
+    $db = new Mailer\Storage\Database(['driver' => 'mysql', 'mysql' => $config]);
+    $id = (int) $db->value('SELECT CONNECTION_ID()');
+
+    // Рвём соединение снаружи — так же его закрывает MySQL по wait_timeout
+    $killer = new PDO(
+        sprintf('mysql:host=%s;port=%d;dbname=%s', $config['host'], $config['port'], $config['database']),
+        (string) $config['username'],
+        (string) $config['password']
+    );
+    $killer->exec('KILL ' . $id);
+    usleep(300000);
+
+    $again = (int) $db->value('SELECT CONNECTION_ID()');
+
+    assertTrue($again > 0, 'запрос после обрыва должен выполниться');
+    assertTrue($again !== $id, 'соединение должно быть новым');
+});

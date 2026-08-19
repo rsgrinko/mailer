@@ -349,31 +349,83 @@ final class Database
     private function run(string $sql, array $params): \PDOStatement
     {
         try {
-            $statement = $this->pdo->prepare($sql);
+            return $this->prepareAndRun($sql, $params);
+        } catch (PDOException $e) {
+            // Воркер живёт часами, и MySQL за это время успевает закрыть соединение
+            // по wait_timeout. Одна попытка переподключиться — и запрос повторяется.
+            if ($this->connectionLost($e)) {
+                $this->reconnect();
 
-            foreach ($params as $key => $value) {
-                $name = is_int($key) ? $key + 1 : ':' . ltrim((string) $key, ':');
-
-                $type = match (true) {
-                    is_int($value)  => PDO::PARAM_INT,
-                    is_bool($value) => PDO::PARAM_INT,
-                    $value === null => PDO::PARAM_NULL,
-                    default         => PDO::PARAM_STR,
-                };
-
-                $statement->bindValue($name, is_bool($value) ? (int) $value : $value, $type);
+                try {
+                    return $this->prepareAndRun($sql, $params);
+                } catch (PDOException $retry) {
+                    $e = $retry;
+                }
             }
 
-            $statement->execute();
-
-            return $statement;
-        } catch (PDOException $e) {
             throw new StorageException(
                 'Ошибка запроса к базе: ' . $e->getMessage(),
                 ['sql' => $sql],
                 0,
                 $e
             );
+        }
+    }
+
+    /**
+     * @param array<string|int, mixed> $params
+     */
+    private function prepareAndRun(string $sql, array $params): \PDOStatement
+    {
+        $statement = $this->pdo->prepare($sql);
+
+        foreach ($params as $key => $value) {
+            $name = is_int($key) ? $key + 1 : ':' . ltrim((string) $key, ':');
+
+            $type = match (true) {
+                is_int($value)  => PDO::PARAM_INT,
+                is_bool($value) => PDO::PARAM_INT,
+                $value === null => PDO::PARAM_NULL,
+                default         => PDO::PARAM_STR,
+            };
+
+            $statement->bindValue($name, is_bool($value) ? (int) $value : $value, $type);
+        }
+
+        $statement->execute();
+
+        return $statement;
+    }
+
+    /**
+     * Связь с сервером оборвалась? Повторять запрос внутри транзакции нельзя —
+     * она всё равно уже потеряна, пусть ошибка идёт наверх.
+     */
+    private function connectionLost(PDOException $e): bool
+    {
+        if ($this->driver !== self::MYSQL || $this->pdo->inTransaction()) {
+            return false;
+        }
+
+        $code    = (int) ($e->errorInfo[1] ?? 0);
+        $message = $e->getMessage();
+
+        return in_array($code, [2006, 2013, 2055], true)
+            || str_contains($message, 'server has gone away')
+            || str_contains($message, 'Lost connection');
+    }
+
+    /**
+     * Поднимает соединение заново.
+     */
+    private function reconnect(): void
+    {
+        $config = (array) Config::get('db.mysql', []);
+
+        try {
+            $this->pdo = $this->connectMysql($config);
+        } catch (StorageException $e) {
+            throw new StorageException('Соединение с базой потеряно и не восстановилось: ' . $e->getMessage(), [], 0, $e);
         }
     }
 }
