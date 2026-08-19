@@ -41,7 +41,11 @@ LOG_SMTP=false
 ```bash
 php bin/mailer migrate
 php bin/mailer seed
+php bin/mailer user:create admin      # пользователь панели, пароль покажется один раз
 ```
+
+Пользователя можно не создавать заранее: пока таблица пуста, панель сама предложит завести
+первого на странице `/ui/setup`. После появления первого пользователя эта страница закрыта.
 
 Для MySQL пропишите в `.env`:
 
@@ -93,10 +97,10 @@ php bin/mailer transport:add основная-цепочка --type=failover --t
 
 - корень сайта — `/var/www/mailer/public`;
 - все запросы уходят в `index.php`;
-- на `/ui` вешается basic auth, потому что своей авторизации у панели нет.
+- у панели свой вход по логину и паролю, отдельный basic auth не нужен (если он всё же
+  нужен — раскомментируйте `auth_basic` в примере и поставьте `UI_AUTH=false`).
 
 ```bash
-htpasswd -c /etc/nginx/mailer.htpasswd admin
 cp deploy/nginx.conf.example /etc/nginx/sites-available/mailer
 ln -s /etc/nginx/sites-available/mailer /etc/nginx/sites-enabled/mailer
 nginx -t && systemctl reload nginx

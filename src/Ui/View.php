@@ -25,6 +25,25 @@ final class View
             'title'   => $title !== '' ? $title : 'Панель',
             'flash'   => self::takeFlash(),
             'active'  => $data['active'] ?? '',
+            'user'    => Auth::enabled() ? Auth::user() : null,
+            'bare'    => false,
+        ]);
+    }
+
+    /**
+     * Страница без шапки и меню — вход и первичная настройка.
+     *
+     * @param array<string, mixed> $data
+     */
+    public static function renderBare(string $template, array $data = [], string $title = ''): string
+    {
+        return self::partial('layout', [
+            'content' => self::partial($template, $data),
+            'title'   => $title !== '' ? $title : 'Панель',
+            'flash'   => self::takeFlash(),
+            'active'  => '',
+            'user'    => null,
+            'bare'    => true,
         ]);
     }
 
@@ -64,9 +83,7 @@ final class View
      */
     public static function flash(string $message, string $type = 'ok'): void
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            @session_start();
-        }
+        Auth::start();
 
         $_SESSION['flash'][] = ['message' => $message, 'type' => $type];
     }
@@ -78,9 +95,7 @@ final class View
      */
     private static function takeFlash(): array
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            @session_start();
-        }
+        Auth::start();
 
         $flash             = $_SESSION['flash'] ?? [];
         $_SESSION['flash'] = [];

@@ -7,30 +7,39 @@ namespace Mailer\Ui;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Http\Router;
+use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
+use Mailer\Ui\Controllers\AuthController;
 use Mailer\Ui\Controllers\DashboardController;
 use Mailer\Ui\Controllers\MessagesController;
 use Mailer\Ui\Controllers\ProjectsController;
 use Mailer\Ui\Controllers\TemplatesController;
 use Mailer\Ui\Controllers\TransportsController;
+use Mailer\Ui\Controllers\UsersController;
 use Mailer\Ui\Controllers\WebhooksController;
 use Throwable;
 
 /**
- * Веб-панель. Своей авторизации нет — предполагается basic auth на nginx.
+ * Веб-панель. Вход по логину и паролю (пользователи в таблице users, права у всех едины);
+ * авторизацию можно выключить настройкой UI_AUTH, если панель уже закрыта на nginx.
  * Всё, что есть в базе, видно и управляется отсюда: очередь, письма, транспорты,
  * проекты, шаблоны, вебхуки, логи и состояние сервиса.
  */
 final class UiKernel
 {
+    /** Страницы, куда пускаем без авторизации */
+    private const PUBLIC_PATHS = ['/ui/login', '/ui/setup'];
+
     private Router $router;
     private Logger $logger;
+    private UserRepository $users;
 
     public function __construct()
     {
         $this->router = new Router();
         $this->logger = new Logger('ui');
+        $this->users  = new UserRepository();
 
         $this->registerRoutes();
     }
@@ -38,6 +47,11 @@ final class UiKernel
     public function handle(Request $request): Response
     {
         try {
+            $denied = $this->guard($request);
+            if ($denied !== null) {
+                return $denied;
+            }
+
             return $this->router->dispatch($request);
         } catch (Throwable $e) {
             $this->logger->error('Ошибка панели', [
@@ -57,6 +71,42 @@ final class UiKernel
         }
     }
 
+    /**
+     * Пускать ли запрос дальше. Возвращает ответ-перенаправление, если входить рано.
+     */
+    private function guard(Request $request): ?Response
+    {
+        if (!Auth::enabled()) {
+            return null;
+        }
+
+        Auth::start();
+
+        $path   = rtrim($request->path, '/');
+        $public = in_array($path, self::PUBLIC_PATHS, true);
+
+        if (Auth::check()) {
+            // Вошедшему на форме входа делать нечего
+            return $public ? Response::redirect(View::url('/')) : null;
+        }
+
+        // Пользователей ещё нет — первым делом заводим себя
+        if ($this->users->count() === 0) {
+            return $path === '/ui/setup' ? null : Response::redirect(View::url('/setup'));
+        }
+
+        if ($path === '/ui/login') {
+            return null;
+        }
+
+        // Куда вернуть после входа: только для обычных переходов, POST повторять не будем
+        $next = $request->method === 'GET' && $path !== '/ui/setup'
+            ? $request->path . ($request->query === [] ? '' : '?' . http_build_query($request->query))
+            : '';
+
+        return Response::redirect(View::url('/login', $next !== '' ? ['next' => $next] : []));
+    }
+
     private function registerRoutes(): void
     {
         $dashboard = new DashboardController();
@@ -65,6 +115,22 @@ final class UiKernel
         $projects  = new ProjectsController();
         $templates = new TemplatesController();
         $webhooks  = new WebhooksController();
+        $users     = new UsersController();
+        $auth      = new AuthController();
+
+        // Вход, выход и первый запуск
+        $this->router->get('/ui/login', fn (Request $r, array $p): Response => $auth->loginForm($r));
+        $this->router->post('/ui/login', fn (Request $r, array $p): Response => $auth->login($r));
+        $this->router->post('/ui/logout', fn (Request $r, array $p): Response => $auth->logout($r));
+        $this->router->get('/ui/setup', fn (Request $r, array $p): Response => $auth->setupForm($r));
+        $this->router->post('/ui/setup', fn (Request $r, array $p): Response => $auth->setup($r));
+
+        // Пользователи панели
+        $this->router->get('/ui/users', fn (Request $r, array $p): Response => $users->index($r));
+        $this->router->get('/ui/users/new', fn (Request $r, array $p): Response => $users->form($r, null));
+        $this->router->post('/ui/users/save', fn (Request $r, array $p): Response => $users->save($r));
+        $this->router->get('/ui/users/{id}', fn (Request $r, array $p): Response => $users->form($r, (int) $p['id']));
+        $this->router->post('/ui/users/{id}/{action}', fn (Request $r, array $p): Response => $users->action($r, (int) $p['id'], (string) $p['action']));
 
         // Дашборд и общее состояние
         $this->router->get('/ui', fn (Request $r, array $p): Response => $dashboard->index($r));

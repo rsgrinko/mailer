@@ -239,7 +239,7 @@ final class DashboardController
      */
     private function tableSizes(Database $db): array
     {
-        $tables = ['messages', 'message_events', 'projects', 'transports', 'templates', 'webhook_deliveries', 'counters', 'settings'];
+        $tables = ['messages', 'message_events', 'projects', 'transports', 'templates', 'webhook_deliveries', 'counters', 'settings', 'users'];
         $result = [];
 
         foreach ($tables as $table) {

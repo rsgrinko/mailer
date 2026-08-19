@@ -13,8 +13,10 @@ use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\SettingRepository;
 use Mailer\Repository\TemplateRepository;
 use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
 use Mailer\Repository\WebhookRepository;
 use Mailer\Security\Crypto;
+use Mailer\Security\Password;
 use Mailer\Smtpd\SmtpServer;
 use Mailer\Storage\Database;
 use Mailer\Storage\Migrator;
@@ -54,6 +56,11 @@ final class Application
                 'worker'               => $this->worker(),
                 'smtpd'                => $this->smtpd(),
                 'status'               => $this->status(),
+
+                'user:create'   => $this->userCreate(),
+                'user:list'     => $this->userList(),
+                'user:password' => $this->userPassword(),
+                'user:delete'   => $this->userDelete(),
 
                 'key:create'     => $this->keyCreate(),
                 'key:list'       => $this->keyList(),
@@ -122,6 +129,12 @@ final class Application
         $this->line('  key:list                       список проектов');
         $this->line('  key:regenerate <имя>           выдать новый ключ');
         $this->line('  key:revoke <имя>               отключить проект');
+        $this->line('');
+        $this->line('Пользователи панели:');
+        $this->line('  user:create <логин> [--password=] [--name=]  завести пользователя');
+        $this->line('  user:list                      список пользователей');
+        $this->line('  user:password <логин> [--password=]   сменить пароль');
+        $this->line('  user:delete <логин> [--force]  удалить пользователя (--force — даже последнего)');
         $this->line('');
         $this->line('Транспорты:');
         $this->line('  transport:add <имя> --type=smtp --host= --port= --encryption= --user= --password= [--from=] [--from-name=] [--default]');
@@ -309,6 +322,104 @@ final class Application
     }
 
     // --- Проекты -------------------------------------------------------------
+
+    private function userCreate(): int
+    {
+        $login = $this->args[0] ?? '';
+        if ($login === '') {
+            $this->line('Укажите логин: php bin/mailer user:create ivan');
+
+            return 1;
+        }
+
+        $password = (string) ($this->options['password'] ?? '');
+        $generated = $password === '';
+        if ($generated) {
+            $password = Password::generate();
+        }
+
+        $user = (new UserRepository())->create([
+            'login'    => $login,
+            'password' => $password,
+            'name'     => $this->options['name'] ?? '',
+            'active'   => true,
+        ]);
+
+        $this->line('Пользователь создан: ' . $user['login']);
+        if ($generated) {
+            $this->line('Пароль (больше не покажется): ' . $password);
+        }
+
+        return 0;
+    }
+
+    private function userList(): int
+    {
+        $users = (new UserRepository())->all();
+
+        if ($users === []) {
+            $this->line('Пользователей нет. Создайте: php bin/mailer user:create ivan');
+
+            return 0;
+        }
+
+        $this->line($this->pad('Логин', 24) . $this->pad('Состояние', 12) . 'Последний вход');
+        foreach ($users as $user) {
+            $this->line(
+                $this->pad((string) $user['login'], 24)
+                . $this->pad((int) $user['active'] === 1 ? 'активен' : 'отключён', 12)
+                . (string) ($user['last_login_at'] ?? 'не входил')
+            );
+        }
+
+        return 0;
+    }
+
+    private function userPassword(): int
+    {
+        $login = $this->args[0] ?? '';
+        $users = new UserRepository();
+        $user  = $login === '' ? null : $users->findByLogin($login);
+
+        if ($user === null) {
+            $this->line('Пользователь не найден: php bin/mailer user:password ivan [--password=]');
+
+            return 1;
+        }
+
+        $password  = (string) ($this->options['password'] ?? '');
+        $generated = $password === '';
+        if ($generated) {
+            $password = Password::generate();
+        }
+
+        $users->setPassword((int) $user['id'], $password);
+
+        $this->line('Пароль пользователя «' . $user['login'] . '» изменён');
+        if ($generated) {
+            $this->line('Новый пароль (больше не покажется): ' . $password);
+        }
+
+        return 0;
+    }
+
+    private function userDelete(): int
+    {
+        $login = $this->args[0] ?? '';
+        $users = new UserRepository();
+        $user  = $login === '' ? null : $users->findByLogin($login);
+
+        if ($user === null) {
+            $this->line('Пользователь не найден: php bin/mailer user:delete ivan');
+
+            return 1;
+        }
+
+        $users->delete((int) $user['id'], isset($this->options['force']));
+        $this->line('Пользователь «' . $user['login'] . '» удалён');
+
+        return 0;
+    }
 
     private function keyCreate(): int
     {
@@ -844,6 +955,16 @@ final class Application
 
             $this->args[] = $argument;
         }
+    }
+
+    /**
+     * Колонка нужной ширины. str_pad считает байты, а в русских словах их вдвое больше.
+     */
+    private function pad(string $text, int $width): string
+    {
+        $length = mb_strlen($text);
+
+        return $length >= $width ? $text . ' ' : $text . str_repeat(' ', $width - $length);
     }
 
     private function line(string $text = ''): void

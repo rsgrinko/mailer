@@ -16,11 +16,14 @@ server {
     access_log /var/log/nginx/mailer-access.log;
     error_log  /var/log/nginx/mailer-error.log;
 
-    # Панель управления. Своей авторизации у неё нет — закрываем basic auth.
-    # Пароль: htpasswd -c /etc/nginx/mailer.htpasswd admin
+    # Панель управления. У неё свой вход по логину и паролю
+    # (php bin/mailer user:create <логин> или страница первого запуска).
+    # Если этого мало, сверху можно добавить basic auth — раскомментируйте две строки
+    # и выключите свою авторизацию настройкой UI_AUTH=false:
+    #   htpasswd -c /etc/nginx/mailer.htpasswd admin
     location /ui {
-        auth_basic           "Панель рассылки";
-        auth_basic_user_file /etc/nginx/mailer.htpasswd;
+        # auth_basic           "Панель рассылки";
+        # auth_basic_user_file /etc/nginx/mailer.htpasswd;
 
         try_files $uri /index.php$is_args$args;
     }

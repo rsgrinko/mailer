@@ -9,9 +9,14 @@ declare(strict_types=1);
  * @var string $title
  * @var array<int, array{message: string, type: string}> $flash
  * @var string $active
+ * @var array<string, mixed>|null $user вошедший пользователь, если авторизация включена
+ * @var bool $bare страница входа — без шапки и меню
  */
 
 use Mailer\Ui\View;
+
+$user = $user ?? null;
+$bare = $bare ?? false;
 
 $menu = [
     'dashboard'  => ['Обзор', '/'],
@@ -21,6 +26,7 @@ $menu = [
     'projects'   => ['Проекты', '/projects'],
     'templates'  => ['Шаблоны', '/templates'],
     'webhooks'   => ['Вебхуки', '/webhooks'],
+    'users'      => ['Пользователи', '/users'],
     'logs'       => ['Логи', '/logs'],
     'system'     => ['Состояние', '/system'],
 ];
@@ -96,6 +102,11 @@ $menu = [
 
         .brand b { font-size: 17px; }
         .brand span { color: var(--muted); font-size: 12px; }
+        .brand .who { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+        .brand .who form { display: inline; }
+
+        .auth { max-width: 380px; margin: 8vh auto 0; }
+        .auth h1 { text-align: center; }
 
         nav { display: flex; gap: 4px; flex-wrap: wrap; }
 
@@ -261,10 +272,20 @@ $menu = [
     </style>
 </head>
 <body>
+<?php if (!$bare): ?>
 <header>
     <div class="brand">
         <b>Почтовый сервис</b>
         <span>панель управления</span>
+
+        <?php if ($user !== null): ?>
+            <span class="who">
+                <span class="muted small"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></span>
+                <form method="post" action="<?= View::e(View::url('/logout')) ?>">
+                    <button type="submit">Выйти</button>
+                </form>
+            </span>
+        <?php endif; ?>
     </div>
     <nav>
         <?php foreach ($menu as $key => [$label, $path]): ?>
@@ -272,6 +293,7 @@ $menu = [
         <?php endforeach; ?>
     </nav>
 </header>
+<?php endif; ?>
 
 <main>
     <?php foreach ($flash as $item): ?>

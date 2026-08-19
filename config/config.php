@@ -112,6 +112,10 @@ return [
     // Веб-панель
     'ui' => [
         'per_page' => Env::int('UI_PER_PAGE', 30),
+        // Вход по логину и паролю. Выключают, если панель уже закрыта basic auth на nginx
+        'auth' => Env::bool('UI_AUTH', true),
+        // Через сколько секунд без активности снова спрашивать пароль (0 — не спрашивать)
+        'session_lifetime' => Env::int('UI_SESSION_LIFETIME', 43200),
         // Разрешить кнопки «повторить», «отменить», «удалить», «тестовое письмо»
         'allow_actions' => Env::bool('UI_ALLOW_ACTIONS', true),
     ],

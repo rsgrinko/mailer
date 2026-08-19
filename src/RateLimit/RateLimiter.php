@@ -31,12 +31,12 @@ final class RateLimiter
         $id = (int) ($project['id'] ?? 0);
 
         $hourLimit = (int) ($project['rate_limit_hour'] ?? 0);
-        if ($hourLimit > 0 && $this->value($this->hourKey('project', $id)) >= $hourLimit) {
+        if ($hourLimit > 0 && $this->count($this->hourKey('project', $id)) >= $hourLimit) {
             return 'Превышен часовой лимит проекта: ' . $hourLimit . ' писем в час';
         }
 
         $dayLimit = (int) ($project['rate_limit_day'] ?? 0);
-        if ($dayLimit > 0 && $this->value($this->dayKey('project', $id)) >= $dayLimit) {
+        if ($dayLimit > 0 && $this->count($this->dayKey('project', $id)) >= $dayLimit) {
             return 'Превышен суточный лимит проекта: ' . $dayLimit . ' писем в сутки';
         }
 
@@ -56,7 +56,7 @@ final class RateLimiter
         }
 
         $id = (int) ($transport['id'] ?? 0);
-        if ($this->value($this->dayKey('transport', $id)) >= $limit) {
+        if ($this->count($this->dayKey('transport', $id)) >= $limit) {
             return 'Превышен суточный лимит транспорта «' . ($transport['name'] ?? '') . '»: ' . $limit . ' писем в сутки';
         }
 
@@ -68,8 +68,8 @@ final class RateLimiter
      */
     public function hitProject(int $projectId): void
     {
-        $this->increment($this->hourKey('project', $projectId), strtotime('+1 hour'));
-        $this->increment($this->dayKey('project', $projectId), strtotime('tomorrow'));
+        $this->hit($this->hourKey('project', $projectId), strtotime('+1 hour'));
+        $this->hit($this->dayKey('project', $projectId), strtotime('tomorrow'));
     }
 
     /**
@@ -77,7 +77,7 @@ final class RateLimiter
      */
     public function hitTransport(int $transportId): void
     {
-        $this->increment($this->dayKey('transport', $transportId), strtotime('tomorrow'));
+        $this->hit($this->dayKey('transport', $transportId), strtotime('tomorrow'));
     }
 
     /**
@@ -88,14 +88,14 @@ final class RateLimiter
     public function projectUsage(int $projectId): array
     {
         return [
-            'hour' => $this->value($this->hourKey('project', $projectId)),
-            'day'  => $this->value($this->dayKey('project', $projectId)),
+            'hour' => $this->count($this->hourKey('project', $projectId)),
+            'day'  => $this->count($this->dayKey('project', $projectId)),
         ];
     }
 
     public function transportUsage(int $transportId): int
     {
-        return $this->value($this->dayKey('transport', $transportId));
+        return $this->count($this->dayKey('transport', $transportId));
     }
 
     /**
@@ -127,7 +127,10 @@ final class RateLimiter
         return $scope . ':' . $id . ':day:' . date('Y-m-d');
     }
 
-    private function value(string $key): int
+    /**
+     * Текущее значение счётчика.
+     */
+    public function count(string $key): int
     {
         $row = $this->db->selectOne('SELECT value FROM counters WHERE counter_key = :key', ['key' => $key]);
 
@@ -138,7 +141,7 @@ final class RateLimiter
      * Увеличивает счётчик на единицу. Пишем одним запросом, чтобы не поймать гонку
      * между воркером и веб-частью.
      */
-    private function increment(string $key, int $expiresAt): void
+    public function hit(string $key, int $expiresAt): void
     {
         // Имена параметров не повторяем: MySQL с настоящими подготовленными
         // выражениями не разрешает использовать один параметр дважды

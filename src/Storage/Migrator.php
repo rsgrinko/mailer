@@ -91,7 +91,37 @@ final class Migrator
     private function migrations(): array
     {
         return [
-            '0001_init' => $this->initialSchema(),
+            '0001_init'  => $this->initialSchema(),
+            '0002_users' => $this->usersSchema(),
+        ];
+    }
+
+    /**
+     * Пользователи панели. Появились позже остальных таблиц, поэтому отдельной миграцией.
+     *
+     * @return array<int, string>
+     */
+    private function usersSchema(): array
+    {
+        $id  = $this->id();
+        $str = fn (int $length = 191): string => $this->str($length);
+        $int = $this->int();
+        $dt  = $this->dt();
+        $end = $this->tableSuffix();
+
+        return [
+            "CREATE TABLE IF NOT EXISTS users (
+                id {$id},
+                login {$str(191)} NOT NULL,
+                name {$str(191)} NULL,
+                password_hash {$str(191)} NOT NULL,
+                active {$int} NOT NULL DEFAULT 1,
+                last_login_at {$dt} NULL,
+                last_login_ip {$str(64)} NULL,
+                created_at {$dt} NOT NULL,
+                updated_at {$dt} NOT NULL
+            ){$end}",
+            $this->index('idx_users_login', 'users', 'login', true),
         ];
     }
 
