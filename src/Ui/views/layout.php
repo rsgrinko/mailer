@@ -223,6 +223,9 @@ $menu = [
         .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
         .filters label { margin: 0; }
 
+        /* Кнопки фильтра — отдельной строкой под полями, иначе сетка ставит их в случайную ячейку */
+        .filter-actions { margin-top: 12px; }
+
         .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; word-break: break-word; }
         .flash.ok { background: var(--ok-bg); color: var(--ok); }
         .flash.error { background: var(--err-bg); color: var(--err); }

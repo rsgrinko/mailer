@@ -8,6 +8,7 @@ use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\UserRepository;
 use Mailer\Security\Password;
+use Mailer\Support\Config;
 use Mailer\Support\MailerException;
 use Mailer\Ui\Auth;
 use Mailer\Ui\View;
@@ -27,9 +28,15 @@ final class UsersController
 
     public function index(Request $request): Response
     {
+        $result = $this->users->paginate(
+            (int) $request->query('page', 1),
+            (int) Config::get('ui.per_page', 30)
+        );
+
         return Response::html(View::render('users', [
             'active'  => 'users',
-            'items'   => $this->users->all(),
+            'items'   => $result['items'],
+            'result'  => $result,
             'current' => Auth::user(),
         ], 'Пользователи'));
     }

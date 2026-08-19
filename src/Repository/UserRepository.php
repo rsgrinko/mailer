@@ -30,6 +30,16 @@ final class UserRepository
     }
 
     /**
+     * Страница списка пользователей.
+     *
+     * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
+     */
+    public function paginate(int $page = 1, int $perPage = 30): array
+    {
+        return $this->db->page('SELECT * FROM users ORDER BY login', [], $page, $perPage);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function find(int $id): ?array

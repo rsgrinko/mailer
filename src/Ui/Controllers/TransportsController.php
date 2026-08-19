@@ -8,6 +8,7 @@ use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\TransportRepository;
+use Mailer\Support\Config;
 use Mailer\Transport\TransportFactory;
 use Mailer\Ui\View;
 use Throwable;
@@ -28,16 +29,20 @@ final class TransportsController
 
     public function index(Request $request): Response
     {
-        $items = $this->transports->all();
+        $result = $this->transports->paginate(
+            (int) $request->query('page', 1),
+            (int) Config::get('ui.per_page', 30)
+        );
 
         $usage = [];
-        foreach ($items as $item) {
+        foreach ($result['items'] as $item) {
             $usage[(int) $item['id']] = $this->limiter->transportUsage((int) $item['id']);
         }
 
         return Response::html(View::render('transports', [
             'active' => 'transports',
-            'items'  => $items,
+            'items'  => $result['items'],
+            'result' => $result,
             'usage'  => $usage,
         ], 'Транспорты'));
     }

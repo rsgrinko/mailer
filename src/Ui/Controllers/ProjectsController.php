@@ -10,6 +10,7 @@ use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
+use Mailer\Support\Config;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -33,16 +34,20 @@ final class ProjectsController
 
     public function index(Request $request): Response
     {
-        $items = $this->projects->all();
-        $usage = [];
+        $result = $this->projects->paginate(
+            (int) $request->query('page', 1),
+            (int) Config::get('ui.per_page', 30)
+        );
 
-        foreach ($items as $item) {
+        $usage = [];
+        foreach ($result['items'] as $item) {
             $usage[(int) $item['id']] = $this->limiter->projectUsage((int) $item['id']);
         }
 
         return Response::html(View::render('projects', [
             'active' => 'projects',
-            'items'  => $items,
+            'items'  => $result['items'],
+            'result' => $result,
             'usage'  => $usage,
         ], 'Проекты'));
     }

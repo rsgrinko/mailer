@@ -47,10 +47,11 @@ use Mailer\Ui\View;
                     <?php } ?>
                 </select>
             </label>
-            <div class="row">
-                <button class="primary" type="submit">Показать</button>
-                <a class="btn" href="<?= View::e(View::url('/webhooks')) ?>">Сбросить</a>
-            </div>
+        </div>
+
+        <div class="row filter-actions">
+            <button class="primary" type="submit">Показать</button>
+            <a class="btn" href="<?= View::e(View::url('/webhooks')) ?>">Сбросить</a>
         </div>
     </form>
 </div>
@@ -98,15 +99,10 @@ use Mailer\Ui\View;
         </table>
     </div>
 
-    <?php if ($result['pages'] > 1) { ?>
-        <div class="pagination">
-            <?php for ($page = 1; $page <= $result['pages']; $page++) { ?>
-                <?php if ($page === $result['page']) { ?>
-                    <span class="current"><?= $page ?></span>
-                <?php } else { ?>
-                    <a href="<?= View::e(View::url('/webhooks', array_merge($filters, ['page' => $page]))) ?>"><?= $page ?></a>
-                <?php } ?>
-            <?php } ?>
-        </div>
-    <?php } ?>
+    <?= View::partial('pagination', [
+        'path'   => '/webhooks',
+        'page'   => $result['page'],
+        'pages'  => $result['pages'],
+        'params' => $filters,
+    ]) ?>
 </div>

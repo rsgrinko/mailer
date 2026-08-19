@@ -7,6 +7,7 @@ namespace Mailer\Ui\Controllers;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\TemplateRepository;
+use Mailer\Support\Config;
 use Mailer\Template\Renderer;
 use Mailer\Ui\View;
 use Throwable;
@@ -27,7 +28,12 @@ final class TemplatesController
 
     public function index(Request $request): Response
     {
-        $items = $this->templates->all();
+        $result = $this->templates->paginate(
+            (int) $request->query('page', 1),
+            (int) Config::get('ui.per_page', 30)
+        );
+
+        $items = $result['items'];
 
         foreach ($items as $index => $item) {
             $items[$index]['variables'] = $this->renderer->variables(
@@ -40,6 +46,7 @@ final class TemplatesController
         return Response::html(View::render('templates', [
             'active' => 'templates',
             'items'  => $items,
+            'result' => $result,
         ], 'Шаблоны'));
     }
 

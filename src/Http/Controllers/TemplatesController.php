@@ -7,6 +7,7 @@ namespace Mailer\Http\Controllers;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\TemplateRepository;
+use Mailer\Support\Config;
 use Mailer\Template\Renderer;
 
 /**
@@ -28,9 +29,14 @@ final class TemplatesController
      */
     public function index(Request $request): Response
     {
+        $result = $this->templates->paginate(
+            (int) $request->query('page', 1),
+            (int) $request->query('per_page', (int) Config::get('ui.per_page', 30))
+        );
+
         $items = [];
 
-        foreach ($this->templates->all() as $template) {
+        foreach ($result['items'] as $template) {
             $items[] = [
                 'name'        => $template['name'],
                 'description' => $template['description'],
@@ -44,6 +50,11 @@ final class TemplatesController
             ];
         }
 
-        return Response::json(['items' => $items, 'total' => count($items)]);
+        return Response::json([
+            'items' => $items,
+            'total' => $result['total'],
+            'page'  => $result['page'],
+            'pages' => $result['pages'],
+        ]);
     }
 }

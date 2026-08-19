@@ -7,12 +7,13 @@ declare(strict_types=1);
  *
  * @var array<int, array<string, mixed>> $items
  * @var array<string, mixed>|null $current
+ * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  */
 
 use Mailer\Ui\View;
 ?>
 <div class="row">
-    <h1 style="margin:0">Пользователи</h1>
+    <h1 style="margin:0">Пользователи <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
     <a class="btn primary" href="<?= View::e(View::url('/users/new')) ?>">Добавить пользователя</a>
 </div>
@@ -71,4 +72,6 @@ use Mailer\Ui\View;
             <?php } ?>
         </table>
     </div>
+
+    <?= View::partial('pagination', ['path' => '/users', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
 </div>

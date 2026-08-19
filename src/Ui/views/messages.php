@@ -88,11 +88,11 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <span>По дату</span>
                 <input type="date" name="date_to" value="<?= View::e(substr($filters['date_to'], 0, 10)) ?>">
             </label>
+        </div>
 
-            <div class="row">
-                <button class="primary" type="submit">Показать</button>
-                <a class="btn" href="<?= View::e(View::url('/messages')) ?>">Сбросить</a>
-            </div>
+        <div class="row filter-actions">
+            <button class="primary" type="submit">Показать</button>
+            <a class="btn" href="<?= View::e(View::url('/messages')) ?>">Сбросить</a>
         </div>
     </form>
 </div>
@@ -152,23 +152,12 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
         </table>
     </div>
 
-    <?php if ($result['pages'] > 1) { ?>
-        <div class="pagination">
-            <?php for ($page = 1; $page <= $result['pages']; $page++) { ?>
-                <?php if ($page > 3 && $page < $result['pages'] - 2 && abs($page - $result['page']) > 2) {
-                    if ($page === 4) {
-                        echo '<span class="muted">…</span>';
-                    }
-                    continue;
-                } ?>
-                <?php if ($page === $result['page']) { ?>
-                    <span class="current"><?= $page ?></span>
-                <?php } else { ?>
-                    <a href="<?= View::e(View::url('/messages', array_merge($filters, ['page' => $page]))) ?>"><?= $page ?></a>
-                <?php } ?>
-            <?php } ?>
-        </div>
-    <?php } ?>
+    <?= View::partial('pagination', [
+        'path'   => '/messages',
+        'page'   => $result['page'],
+        'pages'  => $result['pages'],
+        'params' => $filters,
+    ]) ?>
 </div>
 
 <div class="card">

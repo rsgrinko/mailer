@@ -170,7 +170,7 @@ DELETE /api/v1/messages/{id}
 ## Шаблоны
 
 ```
-GET /api/v1/templates
+GET /api/v1/templates?page=1&per_page=30
 ```
 
 ```json

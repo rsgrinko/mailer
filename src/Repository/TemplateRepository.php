@@ -28,6 +28,16 @@ final class TemplateRepository
     }
 
     /**
+     * Страница списка шаблонов.
+     *
+     * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
+     */
+    public function paginate(int $page = 1, int $perPage = 30): array
+    {
+        return $this->db->page('SELECT * FROM templates ORDER BY name', [], $page, $perPage);
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     public function find(int $id): ?array

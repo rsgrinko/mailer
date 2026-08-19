@@ -46,3 +46,32 @@ test('в запросах нет повторяющихся именованны
         'MySQL не принимает повтор имени параметра в одном запросе: ' . implode(', ', $problems)
     );
 });
+
+test('постраничная выборка считает записи и не выходит за границы', function (): void {
+    $projects = new Mailer\Repository\ProjectRepository();
+
+    for ($i = 1; $i <= 5; $i++) {
+        if ($projects->findByName('страница-' . $i) === null) {
+            $projects->create(['name' => 'страница-' . $i]);
+        }
+    }
+
+    $total = count($projects->all());
+
+    $first = $projects->paginate(1, 2);
+    assertSame($total, $first['total']);
+    assertSame(2, count($first['items']));
+    assertSame((int) ceil($total / 2), $first['pages']);
+
+    $second = $projects->paginate(2, 2);
+    assertSame(2, $second['page']);
+    assertTrue(
+        $first['items'][0]['id'] !== $second['items'][0]['id'],
+        'вторая страница должна отличаться от первой'
+    );
+
+    // Номер больше числа страниц прижимается к последней, ноль и минус — к первой
+    assertSame($first['pages'], $projects->paginate(999, 2)['page']);
+    assertSame(1, $projects->paginate(0, 2)['page']);
+    assertSame(1, $projects->paginate(-5, 2)['page']);
+});

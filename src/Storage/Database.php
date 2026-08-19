@@ -279,6 +279,34 @@ final class Database
     }
 
     /**
+     * Страница результатов запроса: считает общее число строк и отдаёт нужный кусок.
+     * Запрос передаётся без LIMIT, например 'SELECT * FROM projects ORDER BY name'.
+     *
+     * @param array<string|int, mixed> $params
+     * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
+     */
+    public function page(string $sql, array $params = [], int $page = 1, int $perPage = 30): array
+    {
+        $perPage = max(1, min(200, $perPage));
+        $total   = (int) $this->value('SELECT COUNT(*) FROM (' . $sql . ') AS page_source', $params);
+        $pages   = max(1, (int) ceil($total / $perPage));
+        $page    = max(1, min($page, $pages));
+
+        $items = $this->select(
+            $sql . ' LIMIT ' . $perPage . ' OFFSET ' . (($page - 1) * $perPage),
+            $params
+        );
+
+        return [
+            'items'    => $items,
+            'total'    => $total,
+            'page'     => $page,
+            'pages'    => $pages,
+            'per_page' => $perPage,
+        ];
+    }
+
+    /**
      * Есть ли таблица в базе.
      */
     public function hasTable(string $table): bool
