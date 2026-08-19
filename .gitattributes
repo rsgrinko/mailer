@@ -4,3 +4,4 @@
 bin/* text eol=lf
 *.sh text eol=lf
 deploy/*.service text eol=lf
+.gitea/workflows/*.yml text eol=lf

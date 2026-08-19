@@ -1,0 +1,63 @@
+name: Тесты
+
+# Прогон мини-тестраннера на каждый push и pull request.
+# Весь CI работает в одном образе php:8.3-cli (та же версия, что на проде):
+# раннер тянет его один раз и переиспользует, диск лишними слоями не забивается.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Тесты
+    runs-on: ubuntu-latest
+    container:
+      image: php:8.3-cli
+
+    steps:
+      # Готовые actions (actions/checkout и прочие) написаны на JS и требуют node
+      # внутри контейнера. Ставить node в php-образ или брать образ потолще — значит
+      # держать на раннере второй образ, поэтому код забираем обычным git.
+      - name: Забрать код
+        shell: bash
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          set -e
+          git config --global --add safe.directory '*'
+          git init -q .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+
+          # Приватный репозиторий отдаётся только по токену, публичный — и без него
+          if [ -n "$GITEA_TOKEN" ]; then
+            git config --local http.extraheader \
+              "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITEA_TOKEN" | base64 | tr -d '\n')"
+          fi
+
+          git fetch --depth=1 --no-tags origin "+${GITHUB_REF}:refs/ci/build"
+          git checkout -q refs/ci/build
+          git log -1 --format='%h %s'
+
+      - name: Проверить окружение
+        shell: bash
+        run: |
+          set -e
+          php -v
+          for ext in pdo_sqlite openssl mbstring json session; do
+            php -m | grep -qix "$ext" || { echo "В образе нет расширения $ext"; exit 1; }
+          done
+
+      - name: Синтаксис
+        shell: bash
+        run: |
+          set -e
+          find . -name '*.php' -not -path './var/*' -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Тесты
+        shell: bash
+        run: php bin/mailer test
