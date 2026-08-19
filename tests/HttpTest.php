@@ -150,6 +150,16 @@ test('все GET-страницы панели открываются', function
     assertContains('Subject:', $raw->body());
 });
 
+test('в списке писем виден проект', function (): void {
+    Config::set('ui.auth', false);
+
+    $ids  = httpFixtures();
+    $body = (new UiKernel())->handle(httpRequest('GET', '/ui/messages'))->body();
+
+    assertContains('>Проект</th>', $body);
+    assertContains('/ui/projects/' . $ids['project'] . '">http-тест</a>', $body);
+});
+
 test('панель не пускает неизвестный адрес и чужой метод', function (): void {
     Config::set('ui.auth', false);
 

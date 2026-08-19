@@ -15,6 +15,9 @@ declare(strict_types=1);
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 
+// Имена проектов берём из того же списка, что и фильтр — лишний запрос не нужен
+$projectNames = array_column($projects, 'name', 'id');
+
 $statuses = ['queued' => 'в очереди', 'sending' => 'отправляется', 'sent' => 'отправлено', 'failed' => 'ошибка', 'canceled' => 'отменено'];
 $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-релей', 'cli' => 'CLI', 'ui' => 'панель'];
 ?>
@@ -105,6 +108,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <th>Статус</th>
                 <th>Тема</th>
                 <th>Кому</th>
+                <th class="hide-sm">Проект</th>
                 <th class="hide-sm">Транспорт</th>
                 <th class="hide-sm">Попытки</th>
                 <th class="hide-sm">Размер</th>
@@ -135,6 +139,14 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                     </td>
                     <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
                     <td class="small hide-sm">
+                        <?php $projectId = (int) ($row['project_id'] ?? 0); ?>
+                        <?php if (isset($projectNames[$projectId])) { ?>
+                            <a href="<?= View::e(View::route('ui.projects.show', ['id' => $projectId])) ?>"><?= View::e($projectNames[$projectId]) ?></a>
+                        <?php } else { ?>
+                            <span class="muted">—</span>
+                        <?php } ?>
+                    </td>
+                    <td class="small hide-sm">
                         <?= View::e((string) ($row['transport_used'] ?? '—')) ?><br>
                         <span class="muted"><?= View::e(View::source((string) $row['source'])) ?></span>
                     </td>
@@ -147,7 +159,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
             <?php } ?>
 
             <?php if ($result['items'] === []) { ?>
-                <tr><td colspan="8" class="muted">Ничего не нашлось</td></tr>
+                <tr><td colspan="9" class="muted">Ничего не нашлось</td></tr>
             <?php } ?>
         </table>
     </div>
