@@ -243,8 +243,16 @@ final class MessageRepository
         }
 
         if (!empty($filters['search'])) {
-            $conditions[]     = '(subject LIKE :search OR to_json LIKE :search OR from_email LIKE :search OR uuid LIKE :search)';
-            $params['search'] = '%' . (string) $filters['search'] . '%';
+            // Имя параметра в MySQL нельзя повторять в одном запросе — заводим четыре
+            $conditions[] = '(subject LIKE :search_subject OR to_json LIKE :search_to'
+                . ' OR from_email LIKE :search_from OR uuid LIKE :search_uuid)';
+
+            $needle = '%' . (string) $filters['search'] . '%';
+
+            $params['search_subject'] = $needle;
+            $params['search_to']      = $needle;
+            $params['search_from']    = $needle;
+            $params['search_uuid']    = $needle;
         }
 
         if (!empty($filters['date_from'])) {
