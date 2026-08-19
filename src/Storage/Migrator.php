@@ -94,6 +94,24 @@ final class Migrator
             '0001_init'  => $this->initialSchema(),
             '0002_users' => $this->usersSchema(),
             '0003_message_indexes' => $this->messageIndexes(),
+            '0004_message_fulltext' => $this->messageFulltext(),
+        ];
+    }
+
+    /**
+     * Полнотекстовый индекс для поиска по письмам. Есть только в MySQL —
+     * в SQLite полнотекста нет, там поиск остаётся на LIKE (см. MessageRepository).
+     *
+     * @return array<int, string>
+     */
+    private function messageFulltext(): array
+    {
+        if ($this->db->isSqlite()) {
+            return [];
+        }
+
+        return [
+            'ALTER TABLE messages ADD FULLTEXT INDEX ft_messages_search (subject, to_json, from_email)',
         ];
     }
 

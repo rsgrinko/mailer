@@ -101,7 +101,23 @@ final class MailService
             return ['status' => MessageRepository::SENT, 'info' => 'Письмо уже отправлено'];
         }
 
-        return $this->sender->send($row);
+        // Забираем письмо себе тем же способом, что и воркер: иначе он возьмёт его
+        // параллельно, пока идёт эта отправка, и получатель получит два письма
+        $claimed = $this->queue->claimOne($id, 'sync:' . (gethostname() ?: 'host') . ':' . getmypid());
+
+        if ($claimed === null) {
+            $fresh  = $this->messages->find($id);
+            $status = $fresh === null ? MessageRepository::SENT : (string) $fresh['status'];
+
+            return [
+                'status' => $status,
+                'info'   => $status === MessageRepository::SENDING
+                    ? 'Письмо уже отправляется — попробуйте через минуту'
+                    : 'Письмо уже обработано другим процессом',
+            ];
+        }
+
+        return $this->sender->send($claimed);
     }
 
     public function queue(): Queue

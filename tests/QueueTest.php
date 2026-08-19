@@ -285,3 +285,63 @@ test('удаление письма не оставляет следов и пе
     assertTrue($messages->find($id) === null, 'письма больше нет');
     assertSame([], $events->forMessage($id), 'события удалились вместе с письмом');
 });
+
+test('одно письмо нельзя отправить дважды одновременно', function (): void {
+    testTransport();
+
+    $service  = new MailService();
+    $queue    = new Queue();
+    $messages = new MessageRepository();
+
+    $accepted = $service->accept([
+        'to'      => 'user@example.com',
+        'subject' => 'Письмо, которое чуть не ушло дважды',
+        'text'    => 'Текст',
+    ]);
+
+    $id = (int) $accepted['id'];
+
+    // Первым письмо забирает воркер — ровно так же, как в claim()
+    $claimed = $queue->claimOne($id, 'воркер-1');
+    assertTrue($claimed !== null, 'первый захват должен удаться');
+    assertSame(MessageRepository::SENDING, (string) $messages->find($id)['status']);
+
+    // Второй желающий уходит ни с чем
+    assertTrue($queue->claimOne($id, 'воркер-2') === null, 'второй захват должен провалиться');
+
+    // «Отправить сейчас» из панели тоже не должно отправлять занятое письмо
+    $result = $service->sendNow($id);
+    assertSame(MessageRepository::SENDING, $result['status']);
+    assertContains('уже отправляется', $result['info']);
+
+    // Событий отправки не появилось: письмо ушло ровно ноль раз
+    $sent = array_filter(
+        (new EventRepository())->forMessage($id),
+        static fn (array $event): bool => (string) $event['type'] === 'sent'
+    );
+    assertSame([], $sent, 'письмо не должно уходить, пока его держит другой процесс');
+});
+
+test('синхронная отправка забирает письмо из очереди', function (): void {
+    testTransport();
+
+    $service = new MailService();
+
+    $result = $service->accept([
+        'to'      => 'user@example.com',
+        'subject' => 'Синхронное письмо',
+        'text'    => 'Текст',
+        'sync'    => true,
+    ]);
+
+    assertSame(MessageRepository::SENT, $result['status']);
+
+    $id     = (int) $result['id'];
+    $events = (new EventRepository())->forMessage($id);
+
+    $sent = array_filter($events, static fn (array $event): bool => (string) $event['type'] === 'sent');
+    assertSame(1, count($sent), 'событие отправки должно быть ровно одно');
+
+    // Воркеру после синхронной отправки брать уже нечего
+    assertTrue((new Queue())->claimOne($id, 'воркер') === null, 'отправленное письмо захватить нельзя');
+});

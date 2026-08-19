@@ -164,6 +164,43 @@ final class Queue
     }
 
     /**
+     * Захватить одно конкретное письмо — для отправки прямо сейчас: из панели
+     * («отправить сейчас») или синхронным запросом API.
+     *
+     * Без этого захвата письмо остаётся в очереди всё время, пока идёт отправка,
+     * и фоновый воркер спокойно берёт его вторым — получатель получает дубль.
+     * Возвращает строку письма, если захватить удалось, и null, если письмо уже
+     * кто-то отправляет или его статус сменился.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function claimOne(int $id, string $owner): ?array
+    {
+        return $this->db->transaction(function (Database $db) use ($id, $owner): ?array {
+            $updated = $db->execute(
+                'UPDATE messages SET status = :sending, locked_by = :owner, locked_at = :now, updated_at = :now2
+                 WHERE id = :id AND status IN (:queued, :failed, :canceled)',
+                [
+                    'sending'  => MessageRepository::SENDING,
+                    'owner'    => $owner,
+                    'now'      => Database::now(),
+                    'now2'     => Database::now(),
+                    'id'       => $id,
+                    'queued'   => MessageRepository::QUEUED,
+                    'failed'   => MessageRepository::FAILED,
+                    'canceled' => MessageRepository::CANCELED,
+                ]
+            );
+
+            if ($updated === 0) {
+                return null;
+            }
+
+            return $db->selectOne('SELECT * FROM messages WHERE id = :id', ['id' => $id]);
+        });
+    }
+
+    /**
      * Возвращает в очередь письма, которые зависли в статусе «отправляется»
      * (например, воркера убили посреди работы).
      */

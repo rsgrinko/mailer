@@ -23,6 +23,9 @@ final class MessageRepository
 
     public const STATUSES = [self::QUEUED, self::SENDING, self::SENT, self::FAILED, self::CANCELED];
 
+    /** Слова короче этого полнотекстовый индекс MySQL не хранит (innodb_ft_min_token_size) */
+    private const SEARCH_MIN_WORD = 3;
+
     /** Откуда пришло письмо */
     public const SOURCE_API      = 'api';
     public const SOURCE_SENDMAIL = 'sendmail';
@@ -207,6 +210,106 @@ final class MessageRepository
     }
 
     /**
+     * Есть ли в базе полнотекстовый индекс. Проверяем один раз на процесс: код может
+     * приехать на сервер раньше, чем накатят миграцию, и тогда MATCH просто не сработает —
+     * поиск в этом случае должен остаться на LIKE, а не падать с ошибкой.
+     */
+    private function hasFulltextIndex(): bool
+    {
+        static $available = null;
+
+        if ($this->db->isSqlite()) {
+            return false;
+        }
+
+        if ($available === null) {
+            $available = (int) $this->db->value(
+                'SELECT COUNT(*) FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :index',
+                ['table' => 'messages', 'index' => 'ft_messages_search']
+            ) > 0;
+        }
+
+        return $available;
+    }
+
+    /**
+     * Условие поиска по письмам.
+     *
+     * В MySQL ищем полнотекстовым индексом по теме, получателям и отправителю: перебор
+     * с LIKE на десятках тысяч писем стоит сотни миллисекунд, а MATCH идёт по индексу.
+     * Короткие запросы (короче ft_min_token_size) и поиск по идентификатору полнотекстовый
+     * индекс не берёт — для них остаётся LIKE. В SQLite полнотекстового индекса нет,
+     * поэтому там всегда LIKE.
+     *
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    public static function searchCondition(string $search, bool $fulltext): array
+    {
+        $search = trim($search);
+        $words  = preg_split('/\s+/u', $search) ?: [];
+        $short  = false;
+
+        foreach ($words as $word) {
+            if (mb_strlen(trim($word, '*+-<>~()"')) < self::SEARCH_MIN_WORD) {
+                $short = true;
+            }
+        }
+
+        // Идентификатор письма ищем как есть: полнотекстовый индекс рвёт его на куски
+        $looksLikeUuid = preg_match('/^[0-9a-f-]{8,}$/i', $search) === 1;
+
+        if (!$fulltext || $short || $looksLikeUuid || $words === []) {
+            // Имя параметра в MySQL нельзя повторять в одном запросе — заводим четыре
+            $needle = '%' . $search . '%';
+
+            return [
+                '(subject LIKE :search_subject OR to_json LIKE :search_to'
+                    . ' OR from_email LIKE :search_from OR uuid LIKE :search_uuid)',
+                [
+                    'search_subject' => $needle,
+                    'search_to'      => $needle,
+                    'search_from'    => $needle,
+                    'search_uuid'    => $needle,
+                ],
+            ];
+        }
+
+        // Каждое слово обязательно, последнее ищем ещё и по началу: «зака» найдёт «заказ»
+        $terms = [];
+        foreach ($words as $index => $word) {
+            $word = preg_replace('/[+\-<>~()*"@]+/u', ' ', $word);
+            $word = trim((string) $word);
+
+            if ($word === '') {
+                continue;
+            }
+
+            $terms[] = '+' . $word . ($index === count($words) - 1 ? '*' : '');
+        }
+
+        if ($terms === []) {
+            $needle = '%' . $search . '%';
+
+            return [
+                '(subject LIKE :search_subject OR to_json LIKE :search_to'
+                    . ' OR from_email LIKE :search_from OR uuid LIKE :search_uuid)',
+                [
+                    'search_subject' => $needle,
+                    'search_to'      => $needle,
+                    'search_from'    => $needle,
+                    'search_uuid'    => $needle,
+                ],
+            ];
+        }
+
+        return [
+            'MATCH (subject, to_json, from_email) AGAINST (:search_match IN BOOLEAN MODE)',
+            ['search_match' => implode(' ', $terms)],
+        ];
+    }
+
+    /**
      * Условие WHERE по фильтрам.
      *
      * @param array<string, mixed> $filters
@@ -243,16 +346,10 @@ final class MessageRepository
         }
 
         if (!empty($filters['search'])) {
-            // Имя параметра в MySQL нельзя повторять в одном запросе — заводим четыре
-            $conditions[] = '(subject LIKE :search_subject OR to_json LIKE :search_to'
-                . ' OR from_email LIKE :search_from OR uuid LIKE :search_uuid)';
+            [$condition, $searchParams] = self::searchCondition((string) $filters['search'], $this->hasFulltextIndex());
 
-            $needle = '%' . (string) $filters['search'] . '%';
-
-            $params['search_subject'] = $needle;
-            $params['search_to']      = $needle;
-            $params['search_from']    = $needle;
-            $params['search_uuid']    = $needle;
+            $conditions[] = $condition;
+            $params       = array_merge($params, $searchParams);
         }
 
         if (!empty($filters['date_from'])) {
