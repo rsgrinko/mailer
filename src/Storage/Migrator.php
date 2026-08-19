@@ -93,6 +93,24 @@ final class Migrator
         return [
             '0001_init'  => $this->initialSchema(),
             '0002_users' => $this->usersSchema(),
+            '0003_message_indexes' => $this->messageIndexes(),
+        ];
+    }
+
+    /**
+     * Индексы под запросы дашборда и списков. Без них при десятках тысяч писем
+     * обзор считался сотнями миллисекунд: «отправлено сегодня», «ошибок сегодня»,
+     * график за две недели и самое старое письмо в очереди шли полным перебором.
+     *
+     * @return array<int, string>
+     */
+    private function messageIndexes(): array
+    {
+        return [
+            $this->index('idx_messages_status_sent', 'messages', 'status, sent_at'),
+            $this->index('idx_messages_status_updated', 'messages', 'status, updated_at'),
+            $this->index('idx_messages_status_created', 'messages', 'status, created_at'),
+            $this->index('idx_messages_created_status', 'messages', 'created_at, status'),
         ];
     }
 

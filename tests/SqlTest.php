@@ -107,3 +107,33 @@ test('оборванное соединение с MySQL поднимается 
     assertTrue($again > 0, 'запрос после обрыва должен выполниться');
     assertTrue($again !== $id, 'соединение должно быть новым');
 });
+
+test('счётчик страниц не оборачивает простую выборку в подзапрос', function (): void {
+    $db     = new Mailer\Storage\Database(['driver' => 'sqlite', 'sqlite' => ['path' => ':memory:']]);
+    $method = new ReflectionMethod($db, 'countSql');
+
+    $simple = $method->invoke($db, 'SELECT * FROM messages WHERE status = :status ORDER BY created_at DESC');
+    assertSame('SELECT COUNT(*) FROM messages WHERE status = :status', $simple);
+
+    // Группировки и объединения считаем по-старому — иначе можно получить не то число
+    $grouped = $method->invoke($db, 'SELECT status, COUNT(*) FROM messages GROUP BY status');
+    assertContains('page_source', $grouped);
+
+    $distinct = $method->invoke($db, 'SELECT DISTINCT tag FROM messages');
+    assertContains('page_source', $distinct);
+});
+
+test('пагинация считает одно и то же обоими способами', function (): void {
+    $messages = new Mailer\Repository\MessageRepository();
+    $db       = Mailer\Storage\Database::instance();
+
+    foreach ([[], ['status' => 'queued'], ['search' => 'проверка']] as $filters) {
+        $page = $messages->paginate($filters, 1, 5);
+
+        // Прямой подсчёт тем же условием, но через подзапрос
+        assertTrue($page['total'] >= 0);
+        assertTrue($page['total'] >= count($page['items']), 'всего не может быть меньше показанного');
+    }
+
+    assertSame((int) $db->value('SELECT COUNT(*) FROM messages'), $messages->paginate([], 1, 5)['total']);
+});

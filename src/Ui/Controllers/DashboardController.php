@@ -18,6 +18,7 @@ use Mailer\Repository\WebhookRepository;
 use Mailer\Security\Crypto;
 use Mailer\Storage\Database;
 use Mailer\Storage\Migrator;
+use Mailer\Support\Cache;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
 use Mailer\Ui\View;
@@ -55,12 +56,17 @@ final class DashboardController
      */
     public function index(Request $request): Response
     {
+        // График за две недели считается по всей таблице, поэтому держим его
+        // несколько секунд в кэше: на обзоре секундная точность не нужна
+        $ttl = (int) Config::get('ui.stats_cache', 30);
+
         $stats = $this->messages->stats();
+        $daily = Cache::remember('dashboard:daily', $ttl, fn (): array => $this->messages->dailyStats(14));
 
         return Response::html(View::render('dashboard', [
             'active'     => 'dashboard',
             'stats'      => $stats,
-            'daily'      => $this->messages->dailyStats(14),
+            'daily'      => $daily,
             'worker'     => $this->workerState(),
             'recent'     => $this->messages->paginate([], 1, 10)['items'],
             'failed'     => $this->messages->paginate(['status' => MessageRepository::FAILED], 1, 5)['items'],

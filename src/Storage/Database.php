@@ -293,7 +293,7 @@ final class Database
     public function page(string $sql, array $params = [], int $page = 1, int $perPage = 30): array
     {
         $perPage = max(1, min(200, $perPage));
-        $total   = (int) $this->value('SELECT COUNT(*) FROM (' . $sql . ') AS page_source', $params);
+        $total   = (int) $this->value($this->countSql($sql), $params);
         $pages   = max(1, (int) ceil($total / $perPage));
         $page    = max(1, min($page, $pages));
 
@@ -312,8 +312,27 @@ final class Database
     }
 
     /**
-     * Есть ли таблица в базе.
+     * Запрос, считающий строки для пагинации.
+     *
+     * Обычную выборку считаем по тем же условиям, без обёртки в подзапрос: на 50 тысячах
+     * писем подзапрос материализуется и стоит в разы дороже. Всё сложное (группировки,
+     * DISTINCT, объединения) по-прежнему считаем через подзапрос — там это единственный
+     * надёжный способ.
      */
+    private function countSql(string $sql): string
+    {
+        $normalized = trim((string) preg_replace('#\s+#', ' ', $sql));
+
+        $simple = preg_match('#^SELECT (?!DISTINCT\b)(?:.+?) FROM (.+)$#i', $normalized, $matches) === 1
+            && preg_match('#\b(GROUP BY|HAVING|UNION|LIMIT)\b#i', $normalized) !== 1;
+
+        if (!$simple) {
+            return 'SELECT COUNT(*) FROM (' . $sql . ') AS page_source';
+        }
+
+        return 'SELECT COUNT(*) FROM ' . preg_replace('#\s+ORDER BY\s+.+$#i', '', $matches[1]);
+    }
+
     /**
      * Сколько строк в таблице. Нет таблицы — ноль: панель показывает это на состоянии.
      */
