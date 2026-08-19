@@ -261,6 +261,12 @@ if ($command === 'http') {
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT, 60);
 
+        // На Windows у PHP нет своего списка корневых сертификатов — берём список от curl (путь в CURL_CA_BUNDLE)
+        $bundle = getenv('CURL_CA_BUNDLE') ?: '';
+        if ($bundle !== '' && is_file($bundle)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $bundle);
+        }
+
         $handles[(int) $ch] = microtime(true);
         curl_multi_add_handle($multi, $ch);
     };
