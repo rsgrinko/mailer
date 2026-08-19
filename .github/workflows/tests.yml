@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Забрать код
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Расширения спрашиваем у самого PHP: `php -m | grep -q` в конвейере с pipefail
       # роняет шаг на найденном расширении — grep выходит по первому совпадению,
