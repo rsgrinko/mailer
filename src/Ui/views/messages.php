@@ -27,11 +27,11 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <span>Статус</span>
                 <select name="status">
                     <option value="">любой</option>
-                    <?php foreach ($statuses as $value => $label): ?>
+                    <?php foreach ($statuses as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $filters['status'] === $value ? 'selected' : '' ?>>
                             <?= View::e($label) ?> (<?= (int) ($counts[$value] ?? 0) ?>)
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -39,11 +39,11 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <span>Проект</span>
                 <select name="project_id">
                     <option value="">любой</option>
-                    <?php foreach ($projects as $project): ?>
+                    <?php foreach ($projects as $project) { ?>
                         <option value="<?= (int) $project['id'] ?>" <?= (string) $filters['project_id'] === (string) $project['id'] ? 'selected' : '' ?>>
                             <?= View::e($project['name']) ?>
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -51,11 +51,11 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <span>Транспорт</span>
                 <select name="transport_id">
                     <option value="">любой</option>
-                    <?php foreach ($transports as $transport): ?>
+                    <?php foreach ($transports as $transport) { ?>
                         <option value="<?= (int) $transport['id'] ?>" <?= (string) $filters['transport_id'] === (string) $transport['id'] ? 'selected' : '' ?>>
                             <?= View::e($transport['name']) ?>
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -63,9 +63,9 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <span>Источник</span>
                 <select name="source">
                     <option value="">любой</option>
-                    <?php foreach ($sources as $value => $label): ?>
+                    <?php foreach ($sources as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $filters['source'] === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -111,7 +111,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                 <th></th>
             </tr>
 
-            <?php foreach ($result['items'] as $row): ?>
+            <?php foreach ($result['items'] as $row) { ?>
                 <?php $to = array_column(json_decode((string) ($row['to_json'] ?? '[]'), true) ?: [], 'email'); ?>
                 <tr>
                     <td class="nowrap small">
@@ -120,17 +120,17 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                     </td>
                     <td>
                         <span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span>
-                        <?php if (($row['last_error'] ?? null) !== null && $row['status'] !== 'sent'): ?>
+                        <?php if (($row['last_error'] ?? null) !== null && $row['status'] !== 'sent') { ?>
                             <div class="small muted" title="<?= View::e((string) $row['last_error']) ?>">
                                 <?= View::e(Str::limit((string) $row['last_error'], 40)) ?>
                             </div>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td>
                         <a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>"><?= View::e(Str::limit((string) $row['subject'], 55) ?: '(без темы)') ?></a>
-                        <?php if (($row['tag'] ?? null) !== null): ?>
+                        <?php if (($row['tag'] ?? null) !== null) { ?>
                             <span class="badge muted"><?= View::e((string) $row['tag']) ?></span>
-                        <?php endif; ?>
+                        <?php } ?>
                         <div class="mono muted small"><?= View::e((string) $row['uuid']) ?></div>
                     </td>
                     <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
@@ -144,31 +144,31 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                         <a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
 
-            <?php if ($result['items'] === []): ?>
+            <?php if ($result['items'] === []) { ?>
                 <tr><td colspan="8" class="muted">Ничего не нашлось</td></tr>
-            <?php endif; ?>
+            <?php } ?>
         </table>
     </div>
 
-    <?php if ($result['pages'] > 1): ?>
+    <?php if ($result['pages'] > 1) { ?>
         <div class="pagination">
-            <?php for ($page = 1; $page <= $result['pages']; $page++): ?>
+            <?php for ($page = 1; $page <= $result['pages']; $page++) { ?>
                 <?php if ($page > 3 && $page < $result['pages'] - 2 && abs($page - $result['page']) > 2) {
                     if ($page === 4) {
                         echo '<span class="muted">…</span>';
                     }
                     continue;
                 } ?>
-                <?php if ($page === $result['page']): ?>
+                <?php if ($page === $result['page']) { ?>
                     <span class="current"><?= $page ?></span>
-                <?php else: ?>
+                <?php } else { ?>
                     <a href="<?= View::e(View::url('/messages', array_merge($filters, ['page' => $page]))) ?>"><?= $page ?></a>
-                <?php endif; ?>
-            <?php endfor; ?>
+                <?php } ?>
+            <?php } ?>
         </div>
-    <?php endif; ?>
+    <?php } ?>
 </div>
 
 <div class="card">
@@ -178,9 +178,9 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
             <label style="margin:0">
                 <span>Статус</span>
                 <select name="status">
-                    <?php foreach ($statuses as $value => $label): ?>
+                    <?php foreach ($statuses as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $value === 'failed' ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
             <label style="margin:0">

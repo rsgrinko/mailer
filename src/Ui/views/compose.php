@@ -60,11 +60,11 @@ $value = static fn (string $key): string => View::e($prefill[$key] ?? '');
                 <span>Транспорт</span>
                 <select name="transport_id">
                     <option value="">по умолчанию</option>
-                    <?php foreach ($transports as $transport): ?>
+                    <?php foreach ($transports as $transport) { ?>
                         <option value="<?= (int) $transport['id'] ?>" <?= ($prefill['transport'] ?? '') === (string) $transport['id'] ? 'selected' : '' ?>>
                             <?= View::e($transport['name']) ?> (<?= View::e(View::transportType((string) $transport['type'])) ?>)<?= (int) $transport['is_default'] === 1 ? ' — основной' : '' ?>
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -72,9 +72,9 @@ $value = static fn (string $key): string => View::e($prefill[$key] ?? '');
                 <span>От имени проекта (для статистики и лимитов)</span>
                 <select name="project_id">
                     <option value="">без проекта</option>
-                    <?php foreach ($projects as $project): ?>
+                    <?php foreach ($projects as $project) { ?>
                         <option value="<?= (int) $project['id'] ?>"><?= View::e($project['name']) ?></option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -82,9 +82,9 @@ $value = static fn (string $key): string => View::e($prefill[$key] ?? '');
                 <span>Шаблон (тема и тело возьмутся из него, если оставить поля пустыми)</span>
                 <select name="template">
                     <option value="">не использовать</option>
-                    <?php foreach ($templates as $template): ?>
+                    <?php foreach ($templates as $template) { ?>
                         <option value="<?= View::e($template['name']) ?>"><?= View::e($template['name']) ?></option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 

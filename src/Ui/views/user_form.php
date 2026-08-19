@@ -44,27 +44,27 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
                 <span>Может входить в панель</span>
             </label>
 
-            <?php if ($isSelf): ?>
+            <?php if ($isSelf) { ?>
                 <input type="hidden" name="active" value="1">
                 <p class="muted small">Себя отключить нельзя — попросите об этом коллегу.</p>
-            <?php endif; ?>
+            <?php } ?>
 
-            <?php if (!$isNew): ?>
+            <?php if (!$isNew) { ?>
                 <p class="muted small">
                     Последний вход: <?= View::e(View::date($user['last_login_at'] === null ? null : (string) $user['last_login_at'])) ?>
-                    <?php if (($user['last_login_ip'] ?? null) !== null): ?>
+                    <?php if (($user['last_login_ip'] ?? null) !== null) { ?>
                         с адреса <span class="mono"><?= View::e((string) $user['last_login_ip']) ?></span>
-                    <?php endif; ?>
+                    <?php } ?>
                 </p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
 
         <div class="card">
             <h2><?= $isNew ? 'Пароль' : 'Смена пароля' ?></h2>
 
-            <?php if (!$isNew): ?>
+            <?php if (!$isNew) { ?>
                 <p class="muted small" style="margin-top:0">Оставьте поля пустыми, если пароль менять не нужно.</p>
-            <?php endif; ?>
+            <?php } ?>
 
             <label>
                 <span>Пароль (от <?= Password::MIN_LENGTH ?> символов)</span>
@@ -83,7 +83,7 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
     </div>
 </form>
 
-<?php if (!$isNew && !$isSelf): ?>
+<?php if (!$isNew && !$isSelf) { ?>
     <div class="card">
         <h2>Действия</h2>
         <div class="row">
@@ -100,4 +100,4 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
             </form>
         </div>
     </div>
-<?php endif; ?>
+<?php } ?>

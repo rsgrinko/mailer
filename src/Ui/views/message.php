@@ -45,20 +45,20 @@ $isCanceled = (string) $message['status'] === 'canceled';
 ?>
 <div class="card" style="margin-top:16px">
     <div class="row">
-        <?php if (!$isSent): ?>
+        <?php if (!$isSent) { ?>
             <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/send')) ?>">
                 <button class="primary" type="submit">Отправить сейчас</button>
             </form>
             <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/retry')) ?>">
                 <button type="submit">Вернуть в очередь</button>
             </form>
-        <?php endif; ?>
+        <?php } ?>
 
-        <?php if (!$isSent && !$isCanceled): ?>
+        <?php if (!$isSent && !$isCanceled) { ?>
             <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/cancel')) ?>">
                 <button type="submit">Отменить</button>
             </form>
-        <?php endif; ?>
+        <?php } ?>
 
         <a class="btn" href="<?= View::e(View::url('/compose', ['copy' => $id])) ?>">Написать похожее</a>
         <a class="btn" href="<?= View::e(View::url('/messages/' . $id . '/raw')) ?>">Скачать .eml</a>
@@ -76,49 +76,49 @@ $isCanceled = (string) $message['status'] === 'canceled';
             <dt>Идентификатор</dt><dd class="mono"><?= View::e((string) $message['uuid']) ?></dd>
             <dt>От кого</dt><dd><?= View::e(trim((string) ($message['from_name'] ?? '') . ' <' . (string) ($message['from_email'] ?? '') . '>')) ?></dd>
             <dt>Кому</dt><dd><?= View::e($addresses($to)) ?></dd>
-            <?php if ($cc !== []): ?><dt>Копия</dt><dd><?= View::e($addresses($cc)) ?></dd><?php endif; ?>
-            <?php if ($bcc !== []): ?><dt>Скрытая копия</dt><dd><?= View::e($addresses($bcc)) ?></dd><?php endif; ?>
-            <?php if (($message['reply_to'] ?? null) !== null): ?><dt>Ответ на</dt><dd><?= View::e((string) $message['reply_to']) ?></dd><?php endif; ?>
+            <?php if ($cc !== []) { ?><dt>Копия</dt><dd><?= View::e($addresses($cc)) ?></dd><?php } ?>
+            <?php if ($bcc !== []) { ?><dt>Скрытая копия</dt><dd><?= View::e($addresses($bcc)) ?></dd><?php } ?>
+            <?php if (($message['reply_to'] ?? null) !== null) { ?><dt>Ответ на</dt><dd><?= View::e((string) $message['reply_to']) ?></dd><?php } ?>
             <dt>Источник</dt><dd><?= View::e(View::source((string) $message['source'])) ?></dd>
             <dt>Проект</dt>
             <dd>
-                <?php if ($project !== null): ?>
+                <?php if ($project !== null) { ?>
                     <a href="<?= View::e(View::url('/projects/' . $project['id'])) ?>"><?= View::e($project['name']) ?></a>
-                <?php else: ?>
+                <?php } else { ?>
                     <span class="muted">не задан</span>
-                <?php endif; ?>
+                <?php } ?>
             </dd>
             <dt>Транспорт</dt>
             <dd>
-                <?php if ($transport !== null): ?>
+                <?php if ($transport !== null) { ?>
                     <a href="<?= View::e(View::url('/transports/' . $transport['id'])) ?>"><?= View::e($transport['name']) ?></a>
-                <?php else: ?>
+                <?php } else { ?>
                     <span class="muted">выбирается при отправке</span>
-                <?php endif; ?>
-                <?php if (($message['transport_used'] ?? null) !== null): ?>
+                <?php } ?>
+                <?php if (($message['transport_used'] ?? null) !== null) { ?>
                     <span class="muted">(отправлено через <?= View::e((string) $message['transport_used']) ?>)</span>
-                <?php endif; ?>
+                <?php } ?>
             </dd>
-            <?php if (($message['template'] ?? null) !== null): ?>
+            <?php if (($message['template'] ?? null) !== null) { ?>
                 <dt>Шаблон</dt><dd><?= View::e((string) $message['template']) ?></dd>
-            <?php endif; ?>
-            <?php if (($message['tag'] ?? null) !== null): ?>
+            <?php } ?>
+            <?php if (($message['tag'] ?? null) !== null) { ?>
                 <dt>Метка</dt><dd><?= View::e((string) $message['tag']) ?></dd>
-            <?php endif; ?>
+            <?php } ?>
             <dt>Попытки</dt><dd><?= (int) $message['attempts'] ?> из <?= (int) $message['max_attempts'] ?></dd>
             <dt>Размер</dt><dd><?= View::e(Str::bytes((int) $message['size'])) ?></dd>
             <dt>Создано</dt><dd><?= View::e(View::date((string) $message['created_at'])) ?></dd>
             <dt>Готово к отправке</dt><dd><?= View::e(View::date($message['available_at'])) ?></dd>
             <dt>Отправлено</dt><dd><?= View::e(View::date($message['sent_at'])) ?></dd>
-            <?php if (($message['locked_by'] ?? null) !== null): ?>
+            <?php if (($message['locked_by'] ?? null) !== null) { ?>
                 <dt>Занято воркером</dt><dd class="mono"><?= View::e((string) $message['locked_by']) ?></dd>
-            <?php endif; ?>
+            <?php } ?>
         </dl>
 
-        <?php if (($message['last_error'] ?? null) !== null && $message['last_error'] !== ''): ?>
+        <?php if (($message['last_error'] ?? null) !== null && $message['last_error'] !== '') { ?>
             <h2 style="margin-top:16px">Последняя ошибка</h2>
             <pre><?= View::e((string) $message['last_error']) ?></pre>
-        <?php endif; ?>
+        <?php } ?>
     </div>
 
     <div class="card">
@@ -126,47 +126,47 @@ $isCanceled = (string) $message['status'] === 'canceled';
         <div class="table-wrap">
             <table>
                 <tr><th>Когда</th><th>Событие</th><th>Подробности</th></tr>
-                <?php foreach ($events as $event): ?>
+                <?php foreach ($events as $event) { ?>
                     <tr>
                         <td class="nowrap small"><?= View::e(View::date((string) $event['created_at'])) ?></td>
                         <td class="nowrap"><?= View::e(View::event((string) $event['type'])) ?></td>
                         <td class="small"><?= View::e((string) $event['message']) ?>
-                            <?php if (!empty($event['meta'])): ?>
+                            <?php if (!empty($event['meta'])) { ?>
                                 <details>
                                     <summary class="muted">подробнее</summary>
                                     <pre><?= View::e((string) json_encode($event['meta'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
                                 </details>
-                            <?php endif; ?>
+                            <?php } ?>
                         </td>
                     </tr>
-                <?php endforeach; ?>
+                <?php } ?>
             </table>
         </div>
 
-        <?php if ($headers !== [] || $meta !== [] || $templateData !== []): ?>
+        <?php if ($headers !== [] || $meta !== [] || $templateData !== []) { ?>
             <h2 style="margin-top:16px">Дополнительно</h2>
-            <?php if ($headers !== []): ?>
+            <?php if ($headers !== []) { ?>
                 <div class="small muted">Заголовки</div>
                 <pre><?= View::e((string) json_encode($headers, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-            <?php endif; ?>
-            <?php if ($templateData !== []): ?>
+            <?php } ?>
+            <?php if ($templateData !== []) { ?>
                 <div class="small muted" style="margin-top:8px">Данные шаблона</div>
                 <pre><?= View::e((string) json_encode($templateData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-            <?php endif; ?>
-            <?php if ($meta !== []): ?>
+            <?php } ?>
+            <?php if ($meta !== []) { ?>
                 <div class="small muted" style="margin-top:8px">Метаданные</div>
                 <pre><?= View::e((string) json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) ?></pre>
-            <?php endif; ?>
-        <?php endif; ?>
+            <?php } ?>
+        <?php } ?>
     </div>
 </div>
 
-<?php if ($attachments !== []): ?>
+<?php if ($attachments !== []) { ?>
     <div class="card">
         <h2>Вложения</h2>
         <table>
             <tr><th>Имя</th><th>Тип</th><th>Размер</th><th>Встроено</th><th></th></tr>
-            <?php foreach ($attachments as $index => $attachment): ?>
+            <?php foreach ($attachments as $index => $attachment) { ?>
                 <tr>
                     <td><?= View::e((string) ($attachment['name'] ?? '')) ?></td>
                     <td class="small"><?= View::e((string) ($attachment['content_type'] ?? '')) ?></td>
@@ -174,23 +174,23 @@ $isCanceled = (string) $message['status'] === 'canceled';
                     <td class="small"><?= !empty($attachment['inline']) ? 'cid:' . View::e((string) ($attachment['cid'] ?? '')) : '—' ?></td>
                     <td><a href="<?= View::e(View::url('/messages/' . $id . '/attachment', ['index' => $index])) ?>">скачать</a></td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
         </table>
     </div>
-<?php endif; ?>
+<?php } ?>
 
 <div class="card">
     <h2>Содержимое</h2>
 
-    <?php if ($preview['html'] !== ''): ?>
+    <?php if ($preview['html'] !== '') { ?>
         <div class="small muted" style="margin-bottom:6px">HTML-версия</div>
         <iframe class="preview" sandbox srcdoc="<?= View::e($preview['html']) ?>"></iframe>
-    <?php endif; ?>
+    <?php } ?>
 
-    <?php if ($preview['text'] !== ''): ?>
+    <?php if ($preview['text'] !== '') { ?>
         <div class="small muted" style="margin:12px 0 6px">Текстовая версия</div>
         <pre><?= View::e($preview['text']) ?></pre>
-    <?php endif; ?>
+    <?php } ?>
 
     <details style="margin-top:12px">
         <summary>Письмо целиком (MIME)</summary>
@@ -198,12 +198,12 @@ $isCanceled = (string) $message['status'] === 'canceled';
     </details>
 </div>
 
-<?php if ($webhooks !== []): ?>
+<?php if ($webhooks !== []) { ?>
     <div class="card">
         <h2>Вебхуки по этому письму</h2>
         <table>
             <tr><th>Событие</th><th>Статус</th><th>Адрес</th><th>Попытки</th><th>Ответ</th><th>Когда</th></tr>
-            <?php foreach ($webhooks as $hook): ?>
+            <?php foreach ($webhooks as $hook) { ?>
                 <tr>
                     <td><?= View::e((string) $hook['event']) ?></td>
                     <td><span class="badge <?= View::e((string) $hook['status']) ?>"><?= View::e(View::webhookStatus((string) $hook['status'])) ?></span></td>
@@ -212,7 +212,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
                     <td class="small"><?= View::e((string) ($hook['response_code'] ?? '—')) ?></td>
                     <td class="small"><?= View::e(View::date((string) $hook['created_at'])) ?></td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
         </table>
     </div>
-<?php endif; ?>
+<?php } ?>

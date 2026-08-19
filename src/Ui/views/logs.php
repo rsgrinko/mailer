@@ -22,11 +22,11 @@ use Mailer\Ui\View;
             <label style="margin:0; flex:2">
                 <span>Файл</span>
                 <select name="file">
-                    <?php foreach ($files as $file): ?>
+                    <?php foreach ($files as $file) { ?>
                         <option value="<?= View::e($file['name']) ?>" <?= $current === $file['name'] ? 'selected' : '' ?>>
                             <?= View::e($file['name']) ?> — <?= View::e(Str::bytes($file['size'])) ?>
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
             <label style="margin:0; flex:1">
@@ -39,9 +39,9 @@ use Mailer\Ui\View;
 </div>
 
 <div class="card">
-    <?php if ($files === []): ?>
+    <?php if ($files === []) { ?>
         <p class="muted">Логов пока нет.</p>
-    <?php else: ?>
+    <?php } else { ?>
         <pre style="max-height:70vh; overflow:auto"><?= View::e($content !== '' ? $content : 'Файл пуст') ?></pre>
-    <?php endif; ?>
+    <?php } ?>
 </div>

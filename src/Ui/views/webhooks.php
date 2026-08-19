@@ -29,22 +29,22 @@ use Mailer\Ui\View;
                 <span>Статус</span>
                 <select name="status">
                     <option value="">любой</option>
-                    <?php foreach (['queued' => 'в очереди', 'delivered' => 'доставлен', 'failed' => 'не доставлен'] as $value => $label): ?>
+                    <?php foreach (['queued' => 'в очереди', 'delivered' => 'доставлен', 'failed' => 'не доставлен'] as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $filters['status'] === $value ? 'selected' : '' ?>>
                             <?= View::e($label) ?> (<?= (int) ($counts[$value] ?? 0) ?>)
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
             <label>
                 <span>Проект</span>
                 <select name="project_id">
                     <option value="">любой</option>
-                    <?php foreach ($projects as $project): ?>
+                    <?php foreach ($projects as $project) { ?>
                         <option value="<?= (int) $project['id'] ?>" <?= $filters['project_id'] === (string) $project['id'] ? 'selected' : '' ?>>
                             <?= View::e($project['name']) ?>
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
             <div class="row">
@@ -63,7 +63,7 @@ use Mailer\Ui\View;
                 <th>Попытки</th><th>Ответ</th><th>Ошибка</th><th></th>
             </tr>
 
-            <?php foreach ($result['items'] as $item): ?>
+            <?php foreach ($result['items'] as $item) { ?>
                 <tr>
                     <td class="small nowrap"><?= View::e(View::date((string) $item['created_at'])) ?></td>
                     <td><?= View::e((string) $item['event']) ?></td>
@@ -74,9 +74,9 @@ use Mailer\Ui\View;
                     <td class="small"><?= View::e(Str::limit((string) ($item['last_error'] ?? ''), 40)) ?></td>
                     <td class="nowrap">
                         <div class="row">
-                            <?php if ($item['message_id'] !== null): ?>
+                            <?php if ($item['message_id'] !== null) { ?>
                                 <a href="<?= View::e(View::url('/messages/' . $item['message_id'])) ?>">письмо</a>
-                            <?php endif; ?>
+                            <?php } ?>
                             <form method="post" action="<?= View::e(View::url('/webhooks/' . $item['id'] . '/send')) ?>">
                                 <button type="submit">отправить</button>
                             </form>
@@ -90,23 +90,23 @@ use Mailer\Ui\View;
                         </details>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
 
-            <?php if ($result['items'] === []): ?>
+            <?php if ($result['items'] === []) { ?>
                 <tr><td colspan="8" class="muted">Вебхуков нет. Они появятся, если у проекта задан адрес вебхука.</td></tr>
-            <?php endif; ?>
+            <?php } ?>
         </table>
     </div>
 
-    <?php if ($result['pages'] > 1): ?>
+    <?php if ($result['pages'] > 1) { ?>
         <div class="pagination">
-            <?php for ($page = 1; $page <= $result['pages']; $page++): ?>
-                <?php if ($page === $result['page']): ?>
+            <?php for ($page = 1; $page <= $result['pages']; $page++) { ?>
+                <?php if ($page === $result['page']) { ?>
                     <span class="current"><?= $page ?></span>
-                <?php else: ?>
+                <?php } else { ?>
                     <a href="<?= View::e(View::url('/webhooks', array_merge($filters, ['page' => $page]))) ?>"><?= $page ?></a>
-                <?php endif; ?>
-            <?php endfor; ?>
+                <?php } ?>
+            <?php } ?>
         </div>
-    <?php endif; ?>
+    <?php } ?>
 </div>

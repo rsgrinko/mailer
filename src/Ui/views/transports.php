@@ -31,7 +31,7 @@ use Mailer\Ui\View;
                 <th></th>
             </tr>
 
-            <?php foreach ($items as $item): ?>
+            <?php foreach ($items as $item) { ?>
                 <?php
                 $settings = (array) $item['settings'];
                 $target   = match ($item['type']) {
@@ -43,9 +43,9 @@ use Mailer\Ui\View;
                 };
                 ?>
                 <tr>
-                    <td>
+                    <td class="nowrap">
                         <a href="<?= View::e(View::url('/transports/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
-                        <?php if ((int) $item['is_default'] === 1): ?><span class="badge sent">основной</span><?php endif; ?>
+                        <?php if ((int) $item['is_default'] === 1) { ?><span class="badge sent">основной</span><?php } ?>
                     </td>
                     <td><?= View::e(View::transportType((string) $item['type'])) ?></td>
                     <td class="small mono"><?= View::e(Str::limit($target, 50)) ?></td>
@@ -54,16 +54,16 @@ use Mailer\Ui\View;
                         <?= (int) ($usage[(int) $item['id']] ?? 0) ?><?= (int) $item['daily_limit'] > 0 ? ' / ' . (int) $item['daily_limit'] : '' ?>
                     </td>
                     <td class="small">
-                        <?php if ((int) $item['active'] === 1): ?>
+                        <?php if ((int) $item['active'] === 1) { ?>
                             <span class="badge sent">включён</span>
-                        <?php else: ?>
+                        <?php } else { ?>
                             <span class="badge muted">выключен</span>
-                        <?php endif; ?>
-                        <?php if (($item['last_error'] ?? null) !== null && $item['last_error'] !== ''): ?>
+                        <?php } ?>
+                        <?php if (($item['last_error'] ?? null) !== null && $item['last_error'] !== '') { ?>
                             <div class="muted" title="<?= View::e((string) $item['last_error']) ?>">
                                 ошибка: <?= View::e(Str::limit((string) $item['last_error'], 40)) ?>
                             </div>
-                        <?php endif; ?>
+                        <?php } ?>
                         <div class="muted">использован <?= View::e(View::ago($item['last_used_at'])) ?></div>
                     </td>
                     <td class="nowrap">
@@ -74,19 +74,19 @@ use Mailer\Ui\View;
                             <form method="post" action="<?= View::e(View::url('/transports/' . $item['id'] . '/toggle')) ?>">
                                 <button type="submit"><?= (int) $item['active'] === 1 ? 'выключить' : 'включить' ?></button>
                             </form>
-                            <?php if ((int) $item['is_default'] !== 1): ?>
+                            <?php if ((int) $item['is_default'] !== 1) { ?>
                                 <form method="post" action="<?= View::e(View::url('/transports/' . $item['id'] . '/default')) ?>">
                                     <button type="submit">сделать основным</button>
                                 </form>
-                            <?php endif; ?>
+                            <?php } ?>
                         </div>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
 
-            <?php if ($items === []): ?>
+            <?php if ($items === []) { ?>
                 <tr><td colspan="7" class="muted">Транспортов пока нет. Добавьте первый — например, SMTP Яндекса.</td></tr>
-            <?php endif; ?>
+            <?php } ?>
         </table>
     </div>
 </div>

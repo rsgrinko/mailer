@@ -20,9 +20,9 @@ use Mailer\Ui\View;
             дальше вход будет по логину и паролю.
         </p>
 
-        <?php if ($error !== ''): ?>
+        <?php if ($error !== '') { ?>
             <div class="flash error"><?= View::e($error) ?></div>
-        <?php endif; ?>
+        <?php } ?>
 
         <form method="post" action="<?= View::e(View::url('/setup')) ?>">
             <label>

@@ -51,20 +51,20 @@ $isNew = $template === null;
             <textarea name="text"><?= View::e((string) ($template['text'] ?? '')) ?></textarea>
         </label>
 
-        <?php if ($variables !== []): ?>
+        <?php if ($variables !== []) { ?>
             <p class="small muted">В шаблоне используются переменные: <span class="mono"><?= View::e(implode(', ', $variables)) ?></span></p>
-        <?php endif; ?>
+        <?php } ?>
 
         <div class="row">
             <button class="primary" type="submit">Сохранить</button>
-            <?php if (!$isNew): ?>
+            <?php if (!$isNew) { ?>
                 <div class="spacer"></div>
-            <?php endif; ?>
+            <?php } ?>
         </div>
     </div>
 </form>
 
-<?php if (!$isNew): ?>
+<?php if (!$isNew) { ?>
     <div class="card">
         <h2>Предпросмотр</h2>
         <form method="get" action="<?= View::e(View::url('/templates/' . $template['id'])) ?>">
@@ -75,22 +75,22 @@ $isNew = $template === null;
             <button type="submit">Показать</button>
         </form>
 
-        <?php if ($preview !== null): ?>
+        <?php if ($preview !== null) { ?>
             <div style="margin-top:14px">
                 <div class="small muted">Тема</div>
                 <pre><?= View::e($preview['subject']) ?></pre>
 
-                <?php if ($preview['html'] !== ''): ?>
+                <?php if ($preview['html'] !== '') { ?>
                     <div class="small muted" style="margin-top:10px">HTML</div>
                     <iframe class="preview" sandbox srcdoc="<?= View::e($preview['html']) ?>"></iframe>
-                <?php endif; ?>
+                <?php } ?>
 
-                <?php if ($preview['text'] !== ''): ?>
+                <?php if ($preview['text'] !== '') { ?>
                     <div class="small muted" style="margin-top:10px">Текст</div>
                     <pre><?= View::e($preview['text']) ?></pre>
-                <?php endif; ?>
+                <?php } ?>
             </div>
-        <?php endif; ?>
+        <?php } ?>
     </div>
 
     <div class="card">
@@ -98,4 +98,4 @@ $isNew = $template === null;
             <button class="danger" type="submit">Удалить шаблон</button>
         </form>
     </div>
-<?php endif; ?>
+<?php } ?>

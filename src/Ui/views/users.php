@@ -32,31 +32,31 @@ use Mailer\Ui\View;
                 <th></th>
             </tr>
 
-            <?php foreach ($items as $item): ?>
+            <?php foreach ($items as $item) { ?>
                 <?php $isSelf = $current !== null && (int) $current['id'] === (int) $item['id']; ?>
                 <tr>
                     <td>
                         <a href="<?= View::e(View::url('/users/' . $item['id'])) ?>"><?= View::e((string) $item['login']) ?></a>
-                        <?php if ($isSelf): ?>
+                        <?php if ($isSelf) { ?>
                             <span class="muted small">— это вы</span>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td class="small"><?= View::e((string) ($item['name'] ?? '—')) ?></td>
                     <td class="small nowrap">
                         <?= View::e(View::date($item['last_login_at'] === null ? null : (string) $item['last_login_at'])) ?>
-                        <?php if (($item['last_login_ip'] ?? null) !== null): ?>
+                        <?php if (($item['last_login_ip'] ?? null) !== null) { ?>
                             <div class="muted mono small"><?= View::e((string) $item['last_login_ip']) ?></div>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td>
-                        <?php if ((int) $item['active'] === 1): ?>
+                        <?php if ((int) $item['active'] === 1) { ?>
                             <span class="badge sent">активен</span>
-                        <?php else: ?>
+                        <?php } else { ?>
                             <span class="badge muted">отключён</span>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td>
-                        <?php if (!$isSelf): ?>
+                        <?php if (!$isSelf) { ?>
                             <div class="row">
                                 <form method="post" action="<?= View::e(View::url('/users/' . $item['id'] . '/' . ((int) $item['active'] === 1 ? 'disable' : 'enable'))) ?>">
                                     <button type="submit"><?= (int) $item['active'] === 1 ? 'Отключить' : 'Включить' ?></button>
@@ -65,10 +65,10 @@ use Mailer\Ui\View;
                                     <button class="danger" type="submit">Удалить</button>
                                 </form>
                             </div>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
         </table>
     </div>
 </div>

@@ -31,13 +31,13 @@ use Mailer\Ui\View;
                 <th>Состояние</th>
             </tr>
 
-            <?php foreach ($items as $item): ?>
+            <?php foreach ($items as $item) { ?>
                 <tr>
                     <td>
                         <a href="<?= View::e(View::url('/projects/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
-                        <?php if (($item['description'] ?? null) !== null): ?>
+                        <?php if (($item['description'] ?? null) !== null) { ?>
                             <div class="muted small"><?= View::e((string) $item['description']) ?></div>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td class="mono small"><?= View::e(ApiKey::mask((string) $item['api_key_prefix'])) ?></td>
                     <td class="small"><?= View::e((string) ($item['default_from_email'] ?? '—')) ?></td>
@@ -49,18 +49,18 @@ use Mailer\Ui\View;
                     </td>
                     <td class="small mono"><?= View::e((string) ($item['webhook_url'] ?? '—')) ?></td>
                     <td>
-                        <?php if ((int) $item['active'] === 1): ?>
+                        <?php if ((int) $item['active'] === 1) { ?>
                             <span class="badge sent">активен</span>
-                        <?php else: ?>
+                        <?php } else { ?>
                             <span class="badge muted">отключён</span>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
 
-            <?php if ($items === []): ?>
+            <?php if ($items === []) { ?>
                 <tr><td colspan="7" class="muted">Проектов нет. Создайте первый — вместе с ним выдастся API-ключ.</td></tr>
-            <?php endif; ?>
+            <?php } ?>
         </table>
     </div>
 </div>

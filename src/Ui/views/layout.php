@@ -272,33 +272,33 @@ $menu = [
     </style>
 </head>
 <body>
-<?php if (!$bare): ?>
+<?php if (!$bare) { ?>
 <header>
     <div class="brand">
         <b>Почтовый сервис</b>
         <span>панель управления</span>
 
-        <?php if ($user !== null): ?>
+        <?php if ($user !== null) { ?>
             <span class="who">
                 <span class="muted small"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></span>
                 <form method="post" action="<?= View::e(View::url('/logout')) ?>">
                     <button type="submit">Выйти</button>
                 </form>
             </span>
-        <?php endif; ?>
+        <?php } ?>
     </div>
     <nav>
-        <?php foreach ($menu as $key => [$label, $path]): ?>
+        <?php foreach ($menu as $key => [$label, $path]) { ?>
             <a href="<?= View::e(View::url($path)) ?>" class="<?= $active === $key ? 'active' : '' ?>"><?= View::e($label) ?></a>
-        <?php endforeach; ?>
+        <?php } ?>
     </nav>
 </header>
-<?php endif; ?>
+<?php } ?>
 
 <main>
-    <?php foreach ($flash as $item): ?>
+    <?php foreach ($flash as $item) { ?>
         <div class="flash <?= View::e($item['type']) ?>"><?= View::e($item['message']) ?></div>
-    <?php endforeach; ?>
+    <?php } ?>
 
     <?= $content ?>
 </main>

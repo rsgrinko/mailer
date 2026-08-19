@@ -22,23 +22,23 @@ use Mailer\Ui\View;
         <table>
             <tr><th>Имя</th><th>Тема</th><th>Переменные</th><th>Изменён</th></tr>
 
-            <?php foreach ($items as $item): ?>
+            <?php foreach ($items as $item) { ?>
                 <tr>
                     <td>
                         <a href="<?= View::e(View::url('/templates/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
-                        <?php if (($item['description'] ?? null) !== null): ?>
+                        <?php if (($item['description'] ?? null) !== null) { ?>
                             <div class="muted small"><?= View::e((string) $item['description']) ?></div>
-                        <?php endif; ?>
+                        <?php } ?>
                     </td>
                     <td><?= View::e(Str::limit((string) ($item['subject'] ?? ''), 50)) ?></td>
                     <td class="mono small"><?= View::e(implode(', ', (array) $item['variables'])) ?></td>
                     <td class="small"><?= View::e(View::date((string) $item['updated_at'])) ?></td>
                 </tr>
-            <?php endforeach; ?>
+            <?php } ?>
 
-            <?php if ($items === []): ?>
+            <?php if ($items === []) { ?>
                 <tr><td colspan="4" class="muted">Шаблонов нет</td></tr>
-            <?php endif; ?>
+            <?php } ?>
         </table>
     </div>
 </div>

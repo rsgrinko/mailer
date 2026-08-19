@@ -44,11 +44,11 @@ $isNew = $project === null;
                 <span>Транспорт проекта</span>
                 <select name="transport_id">
                     <option value="">использовать основной</option>
-                    <?php foreach ($transports as $transport): ?>
+                    <?php foreach ($transports as $transport) { ?>
                         <option value="<?= (int) $transport['id'] ?>" <?= (int) ($project['transport_id'] ?? 0) === (int) $transport['id'] ? 'selected' : '' ?>>
                             <?= View::e($transport['name']) ?> (<?= View::e(View::transportType((string) $transport['type'])) ?>)
                         </option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -83,9 +83,9 @@ $isNew = $project === null;
                 </label>
             </div>
 
-            <?php if (!$isNew): ?>
+            <?php if (!$isNew) { ?>
                 <p class="muted small">Использовано: <?= (int) $usage['hour'] ?> за час, <?= (int) $usage['day'] ?> за сутки.</p>
-            <?php endif; ?>
+            <?php } ?>
 
             <label>
                 <span>Адрес вебхука (туда придёт результат отправки)</span>
@@ -104,7 +104,7 @@ $isNew = $project === null;
     </div>
 </form>
 
-<?php if (!$isNew): ?>
+<?php if (!$isNew) { ?>
     <div class="card">
         <h2>Ключ доступа</h2>
         <p>
@@ -130,21 +130,21 @@ $isNew = $project === null;
         <div class="table-wrap">
             <table>
                 <tr><th>Когда</th><th>Статус</th><th>Тема</th><th></th></tr>
-                <?php foreach ($recent as $row): ?>
+                <?php foreach ($recent as $row) { ?>
                     <tr>
                         <td class="small nowrap"><?= View::e(View::date((string) $row['created_at'])) ?></td>
                         <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span></td>
                         <td><?= View::e(Str::limit((string) $row['subject'], 50)) ?></td>
                         <td><a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a></td>
                     </tr>
-                <?php endforeach; ?>
-                <?php if ($recent === []): ?>
+                <?php } ?>
+                <?php if ($recent === []) { ?>
                     <tr><td colspan="4" class="muted">Писем ещё не было</td></tr>
-                <?php endif; ?>
+                <?php } ?>
             </table>
         </div>
         <div style="margin-top:10px">
             <a href="<?= View::e(View::url('/messages', ['project_id' => (int) $project['id']])) ?>">Все письма проекта</a>
         </div>
     </div>
-<?php endif; ?>
+<?php } ?>

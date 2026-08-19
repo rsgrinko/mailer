@@ -44,9 +44,9 @@ $isNew    = $transport === null;
                         'null'       => 'null — ничего не отправлять',
                         'failover'   => 'цепочка — пробовать по очереди',
                         'roundrobin' => 'по кругу — чередовать транспорты',
-                    ] as $value => $label): ?>
+                    ] as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $type === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                    <?php endforeach; ?>
+                    <?php } ?>
                 </select>
             </label>
 
@@ -99,9 +99,9 @@ $isNew    = $transport === null;
                 <label style="flex:1">
                     <span>Шифрование</span>
                     <select name="encryption">
-                        <?php foreach (['ssl' => 'SSL (465)', 'tls' => 'STARTTLS (587)', 'none' => 'без шифрования'] as $value => $label): ?>
+                        <?php foreach (['ssl' => 'SSL (465)', 'tls' => 'STARTTLS (587)', 'none' => 'без шифрования'] as $value => $label) { ?>
                             <option value="<?= View::e($value) ?>" <?= (string) ($settings['encryption'] ?? 'ssl') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                        <?php endforeach; ?>
+                        <?php } ?>
                     </select>
                 </label>
             </div>
@@ -120,9 +120,9 @@ $isNew    = $transport === null;
                 <label style="flex:1">
                     <span>Способ авторизации</span>
                     <select name="auth_mode">
-                        <?php foreach (['auto' => 'выбрать самому', 'login' => 'LOGIN', 'plain' => 'PLAIN', 'cram-md5' => 'CRAM-MD5'] as $value => $label): ?>
+                        <?php foreach (['auto' => 'выбрать самому', 'login' => 'LOGIN', 'plain' => 'PLAIN', 'cram-md5' => 'CRAM-MD5'] as $value => $label) { ?>
                             <option value="<?= View::e($value) ?>" <?= (string) ($settings['auth_mode'] ?? 'auto') === $value ? 'selected' : '' ?>><?= View::e($label) ?></option>
-                        <?php endforeach; ?>
+                        <?php } ?>
                     </select>
                 </label>
                 <label style="flex:1">
@@ -152,9 +152,9 @@ $isNew    = $transport === null;
             <label>
                 <span>Имена транспортов через запятую</span>
                 <input type="text" name="transports" value="<?= View::e(implode(', ', (array) ($settings['transports'] ?? []))) ?>" placeholder="yandex, backup, log">
-                <?php if ($all !== []): ?>
+                <?php if ($all !== []) { ?>
                     <span class="muted small">доступны: <?= View::e(implode(', ', array_column($all, 'name'))) ?></span>
-                <?php endif; ?>
+                <?php } ?>
             </label>
         </div>
     </div>
@@ -192,15 +192,15 @@ $isNew    = $transport === null;
         <div class="row">
             <button class="primary" type="submit">Сохранить</button>
 
-            <?php if (!$isNew): ?>
+            <?php if (!$isNew) { ?>
                 <a class="btn" href="<?= View::e(View::url('/transports')) ?>">Отмена</a>
                 <div class="spacer"></div>
-            <?php endif; ?>
+            <?php } ?>
         </div>
     </div>
 </form>
 
-<?php if (!$isNew): ?>
+<?php if (!$isNew) { ?>
     <div class="card">
         <div class="row">
             <form method="post" action="<?= View::e(View::url('/transports/' . $transport['id'] . '/test')) ?>">
@@ -212,4 +212,4 @@ $isNew    = $transport === null;
             </form>
         </div>
     </div>
-<?php endif; ?>
+<?php } ?>

@@ -16,9 +16,9 @@ use Mailer\Ui\View;
     <div class="card">
         <h1>Вход в панель</h1>
 
-        <?php if ($error !== ''): ?>
+        <?php if ($error !== '') { ?>
             <div class="flash error"><?= View::e($error) ?></div>
-        <?php endif; ?>
+        <?php } ?>
 
         <form method="post" action="<?= View::e(View::url('/login')) ?>">
             <input type="hidden" name="next" value="<?= View::e($next) ?>">
