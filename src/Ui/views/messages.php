@@ -163,6 +163,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
 <div class="card">
     <h2>Массовые действия</h2>
     <form method="post" action="<?= View::e(View::route('ui.messages.bulk')) ?>" onsubmit="return confirm('Точно применить действие ко всем письмам выбранного статуса?')">
+        <?= View::csrf() ?>
         <div class="row">
             <label style="margin:0">
                 <span>Статус</span>

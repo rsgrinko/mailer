@@ -22,6 +22,7 @@ $isNew = $template === null;
 </div>
 
 <form method="post" action="<?= View::e(View::route('ui.templates.save')) ?>">
+    <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($template['id'] ?? 0) ?>">
 
     <div class="card" style="margin-top:16px">
@@ -95,6 +96,7 @@ $isNew = $template === null;
 
     <div class="card">
         <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить шаблон?')">
+            <?= View::csrf() ?>
             <button class="danger" type="submit">Удалить шаблон</button>
         </form>
     </div>

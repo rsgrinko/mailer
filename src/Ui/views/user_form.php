@@ -22,6 +22,7 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
 </div>
 
 <form method="post" action="<?= View::e(View::route('ui.users.save')) ?>">
+    <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($user['id'] ?? 0) ?>">
 
     <div class="grid cols-2" style="margin-top:16px">
@@ -89,13 +90,16 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
         <div class="row">
             <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => 'password'])) ?>"
                   onsubmit="return confirm('Сбросить пароль? Новый покажется один раз.')">
+                <?= View::csrf() ?>
                 <button type="submit">Сбросить пароль</button>
             </form>
             <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => (int) $user['active'] === 1 ? 'disable' : 'enable'])) ?>">
+                <?= View::csrf() ?>
                 <button type="submit"><?= (int) $user['active'] === 1 ? 'Отключить' : 'Включить' ?></button>
             </form>
             <div class="spacer"></div>
             <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить пользователя?')">
+                <?= View::csrf() ?>
                 <button class="danger" type="submit">Удалить</button>
             </form>
         </div>

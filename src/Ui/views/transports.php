@@ -70,13 +70,16 @@ use Mailer\Ui\View;
                     <td class="nowrap">
                         <div class="row">
                             <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'test'])) ?>">
+                                <?= View::csrf() ?>
                                 <button type="submit">проверить</button>
                             </form>
                             <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'toggle'])) ?>">
+                                <?= View::csrf() ?>
                                 <button type="submit"><?= (int) $item['active'] === 1 ? 'выключить' : 'включить' ?></button>
                             </form>
                             <?php if ((int) $item['is_default'] !== 1) { ?>
                                 <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'default'])) ?>">
+                                    <?= View::csrf() ?>
                                     <button type="submit">сделать основным</button>
                                 </form>
                             <?php } ?>

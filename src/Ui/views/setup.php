@@ -25,6 +25,7 @@ use Mailer\Ui\View;
         <?php } ?>
 
         <form method="post" action="<?= View::e(View::route('ui.setup')) ?>">
+            <?= View::csrf() ?>
             <label>
                 <span>Логин</span>
                 <input type="text" name="login" value="<?= View::e($login) ?>" autofocus required autocomplete="username">

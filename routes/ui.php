@@ -24,7 +24,7 @@ use Mailer\Ui\Controllers\WebhooksController;
 use Mailer\Ui\View;
 
 return static function (Router $router): void {
-    $router->group(['prefix' => '/ui'], static function (Router $router): void {
+    $router->group(['prefix' => '/ui', 'middleware' => 'csrf'], static function (Router $router): void {
         // Вход и первый запуск
         $router->group(['middleware' => 'panel-guest'], static function (Router $router): void {
             $router->get('/login', [AuthController::class, 'loginForm'])->name('ui.login');

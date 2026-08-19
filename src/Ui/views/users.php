@@ -60,9 +60,11 @@ use Mailer\Ui\View;
                         <?php if (!$isSelf) { ?>
                             <div class="row">
                                 <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $item['id'], 'action' => (int) $item['active'] === 1 ? 'disable' : 'enable'])) ?>">
+                                    <?= View::csrf() ?>
                                     <button type="submit"><?= (int) $item['active'] === 1 ? 'Отключить' : 'Включить' ?></button>
                                 </form>
                                 <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $item['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить пользователя?')">
+                                    <?= View::csrf() ?>
                                     <button class="danger" type="submit">Удалить</button>
                                 </form>
                             </div>

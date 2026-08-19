@@ -204,3 +204,35 @@ test('данные запроса не прошли проверку — 422, а
     assertSame(422, $response->status());
     assertContains('to', $response->body());
 });
+
+test('форма без токена не проходит', function (): void {
+    Config::set('ui.auth', false);
+
+    $kernel = new UiKernel();
+    $token  = Mailer\Ui\Csrf::token();
+
+    // Ничего не прислали
+    $denied = $kernel->handle(httpRequest('POST', '/ui/logout'));
+    assertSame(403, $denied->status());
+    assertContains('Форма устарела', $denied->body());
+
+    // Прислали чужой токен
+    assertSame(403, $kernel->handle(httpRequest('POST', '/ui/logout', [], ['_token' => 'чужой']))->status());
+
+    // Свой токен — запрос проходит дальше
+    $allowed = $kernel->handle(httpRequest('POST', '/ui/logout', [], ['_token' => $token]));
+    assertSame(302, $allowed->status());
+
+    // Токен можно передать и заголовком — так удобно из fetch
+    $byHeader = $kernel->handle(httpRequest('POST', '/ui/logout', ['x-csrf-token' => Mailer\Ui\Csrf::token()]));
+    assertSame(302, $byHeader->status());
+});
+
+test('на страницах панели есть скрытое поле с токеном', function (): void {
+    Config::set('ui.auth', false);
+
+    $body = (new UiKernel())->handle(httpRequest('GET', '/ui/transports'))->body();
+
+    assertContains('name="_token"', $body);
+    assertContains(Mailer\Ui\Csrf::token(), $body);
+});

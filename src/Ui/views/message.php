@@ -47,15 +47,18 @@ $isCanceled = (string) $message['status'] === 'canceled';
     <div class="row">
         <?php if (!$isSent) { ?>
             <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'send'])) ?>">
+                <?= View::csrf() ?>
                 <button class="primary" type="submit">Отправить сейчас</button>
             </form>
             <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'retry'])) ?>">
+                <?= View::csrf() ?>
                 <button type="submit">Вернуть в очередь</button>
             </form>
         <?php } ?>
 
         <?php if (!$isSent && !$isCanceled) { ?>
             <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'cancel'])) ?>">
+                <?= View::csrf() ?>
                 <button type="submit">Отменить</button>
             </form>
         <?php } ?>
@@ -64,6 +67,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
         <a class="btn" href="<?= View::e(View::route('ui.messages.raw', ['id' => $id])) ?>">Скачать .eml</a>
         <div class="spacer"></div>
         <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить письмо вместе с историей и вложениями?')">
+            <?= View::csrf() ?>
             <button class="danger" type="submit">Удалить</button>
         </form>
     </div>

@@ -109,27 +109,34 @@ use Mailer\Ui\View;
     <h2>Обслуживание</h2>
     <div class="row">
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'migrate'])) ?>">
+            <?= View::csrf() ?>
             <button type="submit">Применить миграции</button>
         </form>
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'worker-once'])) ?>">
+            <?= View::csrf() ?>
             <button type="submit">Разовый проход воркера</button>
         </form>
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'restart-worker'])) ?>"
               onsubmit="return confirm('Перезапустить воркер? Он доработает текущую пачку и выйдет, systemd поднимет его снова.')">
+            <?= View::csrf() ?>
             <button type="submit">Перезапустить воркер</button>
         </form>
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'requeue'])) ?>">
+            <?= View::csrf() ?>
             <button type="submit">Вернуть зависшие письма</button>
         </form>
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'cleanup-counters'])) ?>">
+            <?= View::csrf() ?>
             <button type="submit">Убрать старые счётчики</button>
         </form>
         <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'reset-counters'])) ?>" onsubmit="return confirm('Сбросить все счётчики лимитов?')">
+            <?= View::csrf() ?>
             <button class="danger" type="submit">Сбросить лимиты</button>
         </form>
     </div>
 
     <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'purge'])) ?>" style="margin-top:14px" onsubmit="return confirm('Удалить письма? Отменить это будет нельзя.')">
+        <?= View::csrf() ?>
         <div class="row">
             <label style="margin:0">
                 <span>Удалить письма в статусе</span>

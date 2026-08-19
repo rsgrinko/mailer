@@ -9,6 +9,7 @@ use Mailer\Http\Response;
 use Mailer\Http\Router;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
+use Mailer\Ui\Middleware\CsrfGuard;
 use Mailer\Ui\Middleware\PanelAuth;
 use Mailer\Ui\Middleware\PanelGuest;
 use Mailer\Ui\Middleware\PanelSetup;
@@ -67,6 +68,7 @@ final class UiKernel
     {
         if ($this->router === null) {
             $this->router = (new Router())
+                ->middleware('csrf', new CsrfGuard())
                 ->middleware('panel-auth', new PanelAuth())
                 ->middleware('panel-guest', new PanelGuest())
                 ->middleware('panel-setup', new PanelSetup())

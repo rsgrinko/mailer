@@ -24,6 +24,7 @@ $isNew = $project === null;
 </div>
 
 <form method="post" action="<?= View::e(View::route('ui.projects.save')) ?>">
+    <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($project['id'] ?? 0) ?>">
 
     <div class="grid cols-2" style="margin-top:16px">
@@ -113,13 +114,16 @@ $isNew = $project === null;
         </p>
         <div class="row">
             <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'key'])) ?>" onsubmit="return confirm('Выдать новый ключ? Старый сразу перестанет работать.')">
+                <?= View::csrf() ?>
                 <button type="submit">Выдать новый ключ</button>
             </form>
             <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'toggle'])) ?>">
+                <?= View::csrf() ?>
                 <button type="submit"><?= (int) $project['active'] === 1 ? 'Отключить проект' : 'Включить проект' ?></button>
             </form>
             <div class="spacer"></div>
             <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить проект? Письма останутся в истории.')">
+                <?= View::csrf() ?>
                 <button class="danger" type="submit">Удалить проект</button>
             </form>
         </div>

@@ -414,6 +414,7 @@ $menu = [
             <span class="who">
                 <span class="muted small"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></span>
                 <form method="post" action="<?= View::e(View::route('ui.logout')) ?>">
+                    <?= View::csrf() ?>
                     <button type="submit">Выйти</button>
                 </form>
             </span>

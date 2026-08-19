@@ -18,6 +18,7 @@ use Mailer\Ui\View;
     <h1 style="margin:0">Вебхуки</h1>
     <div class="spacer"></div>
     <form method="post" action="<?= View::e(View::route('ui.webhooks.process')) ?>">
+        <?= View::csrf() ?>
         <button class="primary" type="submit">Разослать сейчас</button>
     </form>
 </div>
@@ -79,9 +80,11 @@ use Mailer\Ui\View;
                                 <a href="<?= View::e(View::route('ui.messages.show', ['id' => $item['message_id']])) ?>">письмо</a>
                             <?php } ?>
                             <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'send'])) ?>">
+                                <?= View::csrf() ?>
                                 <button type="submit">отправить</button>
                             </form>
                             <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'delete'])) ?>">
+                                <?= View::csrf() ?>
                                 <button class="danger" type="submit">удалить</button>
                             </form>
                         </div>

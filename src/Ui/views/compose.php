@@ -18,6 +18,7 @@ $value = static fn (string $key): string => View::e($prefill[$key] ?? '');
 <h1>Написать письмо</h1>
 
 <form method="post" action="<?= View::e(View::route('ui.compose')) ?>">
+    <?= View::csrf() ?>
     <div class="grid cols-2">
         <div class="card">
             <h2>Кому и от кого</h2>

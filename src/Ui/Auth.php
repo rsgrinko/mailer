@@ -118,6 +118,9 @@ final class Auth
             session_regenerate_id(true);
         }
 
+        // Токен форм тоже меняем: старый мог быть подсмотрен до входа
+        Csrf::rotate();
+
         $_SESSION[self::SESSION_KEY] = [
             'id'    => (int) $user['id'],
             'login' => (string) $user['login'],
@@ -132,6 +135,7 @@ final class Auth
         self::start();
 
         unset($_SESSION[self::SESSION_KEY]);
+        Csrf::rotate();
         self::$cached = null;
 
         if (session_status() === PHP_SESSION_ACTIVE) {

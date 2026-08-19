@@ -21,6 +21,7 @@ use Mailer\Ui\View;
         <?php } ?>
 
         <form method="post" action="<?= View::e(View::route('ui.login')) ?>">
+            <?= View::csrf() ?>
             <input type="hidden" name="next" value="<?= View::e($next) ?>">
 
             <label>
