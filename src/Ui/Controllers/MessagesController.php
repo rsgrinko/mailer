@@ -88,7 +88,7 @@ final class MessagesController
         if ($row === null) {
             View::flash('Письмо не найдено', 'error');
 
-            return Response::redirect(View::url('/messages'));
+            return Response::redirect(View::route('ui.messages'));
         }
 
         // Собираем письмо целиком — его удобно посмотреть глазами
@@ -136,14 +136,14 @@ final class MessagesController
         if (!(bool) Config::get('ui.allow_actions', true)) {
             View::flash('Действия из панели отключены настройкой UI_ALLOW_ACTIONS', 'error');
 
-            return Response::redirect(View::url('/messages/' . $id));
+            return Response::redirect(View::route('ui.messages.show', ['id' => $id]));
         }
 
         $row = $this->messages->find($id);
         if ($row === null) {
             View::flash('Письмо не найдено', 'error');
 
-            return Response::redirect(View::url('/messages'));
+            return Response::redirect(View::route('ui.messages'));
         }
 
         switch ($action) {
@@ -179,13 +179,13 @@ final class MessagesController
                 $this->messages->delete($id);
                 View::flash('Письмо удалено');
 
-                return Response::redirect(View::url('/messages'));
+                return Response::redirect(View::route('ui.messages'));
 
             default:
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::url('/messages/' . $id));
+        return Response::redirect(View::route('ui.messages.show', ['id' => $id]));
     }
 
     /**
@@ -214,7 +214,7 @@ final class MessagesController
 
         View::flash('Обработано писем: ' . $count);
 
-        return Response::redirect(View::url('/messages', ['status' => $status]));
+        return Response::redirect(View::route('ui.messages', ['status' => $status]));
     }
 
     /**
@@ -326,7 +326,7 @@ final class MessagesController
             } else {
                 View::flash('Данные шаблона должны быть корректным JSON', 'error');
 
-                return Response::redirect(View::url('/compose'));
+                return Response::redirect(View::route('ui.compose'));
             }
         }
 
@@ -352,11 +352,11 @@ final class MessagesController
                 . (isset($result['info']) ? ' — ' . $result['info'] : '')
             );
 
-            return Response::redirect(View::url('/messages/' . $result['id']));
+            return Response::redirect(View::route('ui.messages.show', ['id' => $result['id']]));
         } catch (Throwable $e) {
             View::flash('Не получилось: ' . $e->getMessage(), 'error');
 
-            return Response::redirect(View::url('/compose'));
+            return Response::redirect(View::route('ui.compose'));
         }
     }
 }

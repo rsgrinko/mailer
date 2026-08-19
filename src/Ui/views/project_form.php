@@ -20,10 +20,10 @@ $isNew = $project === null;
 <div class="row">
     <h1 style="margin:0"><?= $isNew ? 'Новый проект' : 'Проект «' . View::e((string) $project['name']) . '»' ?></h1>
     <div class="spacer"></div>
-    <a class="btn" href="<?= View::e(View::url('/projects')) ?>">К списку</a>
+    <a class="btn" href="<?= View::e(View::route('ui.projects')) ?>">К списку</a>
 </div>
 
-<form method="post" action="<?= View::e(View::url('/projects/save')) ?>">
+<form method="post" action="<?= View::e(View::route('ui.projects.save')) ?>">
     <input type="hidden" name="id" value="<?= (int) ($project['id'] ?? 0) ?>">
 
     <div class="grid cols-2" style="margin-top:16px">
@@ -112,14 +112,14 @@ $isNew = $project === null;
             Полностью ключ хранится только у вас — в базе лежит его хеш.
         </p>
         <div class="row">
-            <form method="post" action="<?= View::e(View::url('/projects/' . $project['id'] . '/key')) ?>" onsubmit="return confirm('Выдать новый ключ? Старый сразу перестанет работать.')">
+            <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'key'])) ?>" onsubmit="return confirm('Выдать новый ключ? Старый сразу перестанет работать.')">
                 <button type="submit">Выдать новый ключ</button>
             </form>
-            <form method="post" action="<?= View::e(View::url('/projects/' . $project['id'] . '/toggle')) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'toggle'])) ?>">
                 <button type="submit"><?= (int) $project['active'] === 1 ? 'Отключить проект' : 'Включить проект' ?></button>
             </form>
             <div class="spacer"></div>
-            <form method="post" action="<?= View::e(View::url('/projects/' . $project['id'] . '/delete')) ?>" onsubmit="return confirm('Удалить проект? Письма останутся в истории.')">
+            <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить проект? Письма останутся в истории.')">
                 <button class="danger" type="submit">Удалить проект</button>
             </form>
         </div>
@@ -135,7 +135,7 @@ $isNew = $project === null;
                         <td class="small nowrap"><?= View::e(View::date((string) $row['created_at'])) ?></td>
                         <td><span class="badge <?= View::e($row['status']) ?>"><?= View::e(View::status((string) $row['status'])) ?></span></td>
                         <td><?= View::e(Str::limit((string) $row['subject'], 50)) ?></td>
-                        <td><a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a></td>
+                        <td><a href="<?= View::e(View::route('ui.messages.show', ['id' => $row['id']])) ?>">открыть</a></td>
                     </tr>
                 <?php } ?>
                 <?php if ($recent === []) { ?>
@@ -144,7 +144,7 @@ $isNew = $project === null;
             </table>
         </div>
         <div style="margin-top:10px">
-            <a href="<?= View::e(View::url('/messages', ['project_id' => (int) $project['id']])) ?>">Все письма проекта</a>
+            <a href="<?= View::e(View::route('ui.messages', ['project_id' => (int) $project['id']])) ?>">Все письма проекта</a>
         </div>
     </div>
 <?php } ?>

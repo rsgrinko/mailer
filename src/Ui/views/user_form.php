@@ -18,10 +18,10 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
 <div class="row">
     <h1 style="margin:0"><?= $isNew ? 'Новый пользователь' : 'Пользователь «' . View::e((string) $user['login']) . '»' ?></h1>
     <div class="spacer"></div>
-    <a class="btn" href="<?= View::e(View::url('/users')) ?>">К списку</a>
+    <a class="btn" href="<?= View::e(View::route('ui.users')) ?>">К списку</a>
 </div>
 
-<form method="post" action="<?= View::e(View::url('/users/save')) ?>">
+<form method="post" action="<?= View::e(View::route('ui.users.save')) ?>">
     <input type="hidden" name="id" value="<?= (int) ($user['id'] ?? 0) ?>">
 
     <div class="grid cols-2" style="margin-top:16px">
@@ -87,15 +87,15 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
     <div class="card">
         <h2>Действия</h2>
         <div class="row">
-            <form method="post" action="<?= View::e(View::url('/users/' . $user['id'] . '/password')) ?>"
+            <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => 'password'])) ?>"
                   onsubmit="return confirm('Сбросить пароль? Новый покажется один раз.')">
                 <button type="submit">Сбросить пароль</button>
             </form>
-            <form method="post" action="<?= View::e(View::url('/users/' . $user['id'] . '/' . ((int) $user['active'] === 1 ? 'disable' : 'enable'))) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => (int) $user['active'] === 1 ? 'disable' : 'enable'])) ?>">
                 <button type="submit"><?= (int) $user['active'] === 1 ? 'Отключить' : 'Включить' ?></button>
             </form>
             <div class="spacer"></div>
-            <form method="post" action="<?= View::e(View::url('/users/' . $user['id'] . '/delete')) ?>" onsubmit="return confirm('Удалить пользователя?')">
+            <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $user['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить пользователя?')">
                 <button class="danger" type="submit">Удалить</button>
             </form>
         </div>

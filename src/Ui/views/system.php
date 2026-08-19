@@ -108,28 +108,28 @@ use Mailer\Ui\View;
 <div class="card">
     <h2>Обслуживание</h2>
     <div class="row">
-        <form method="post" action="<?= View::e(View::url('/system/migrate')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'migrate'])) ?>">
             <button type="submit">Применить миграции</button>
         </form>
-        <form method="post" action="<?= View::e(View::url('/system/worker-once')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'worker-once'])) ?>">
             <button type="submit">Разовый проход воркера</button>
         </form>
-        <form method="post" action="<?= View::e(View::url('/system/restart-worker')) ?>"
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'restart-worker'])) ?>"
               onsubmit="return confirm('Перезапустить воркер? Он доработает текущую пачку и выйдет, systemd поднимет его снова.')">
             <button type="submit">Перезапустить воркер</button>
         </form>
-        <form method="post" action="<?= View::e(View::url('/system/requeue')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'requeue'])) ?>">
             <button type="submit">Вернуть зависшие письма</button>
         </form>
-        <form method="post" action="<?= View::e(View::url('/system/cleanup-counters')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'cleanup-counters'])) ?>">
             <button type="submit">Убрать старые счётчики</button>
         </form>
-        <form method="post" action="<?= View::e(View::url('/system/reset-counters')) ?>" onsubmit="return confirm('Сбросить все счётчики лимитов?')">
+        <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'reset-counters'])) ?>" onsubmit="return confirm('Сбросить все счётчики лимитов?')">
             <button class="danger" type="submit">Сбросить лимиты</button>
         </form>
     </div>
 
-    <form method="post" action="<?= View::e(View::url('/system/purge')) ?>" style="margin-top:14px" onsubmit="return confirm('Удалить письма? Отменить это будет нельзя.')">
+    <form method="post" action="<?= View::e(View::route('ui.system.action', ['action' => 'purge'])) ?>" style="margin-top:14px" onsubmit="return confirm('Удалить письма? Отменить это будет нельзя.')">
         <div class="row">
             <label style="margin:0">
                 <span>Удалить письма в статусе</span>

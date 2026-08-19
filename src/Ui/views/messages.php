@@ -21,7 +21,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
 <h1>Письма <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
 
 <div class="card">
-    <form method="get" action="<?= View::e(View::url('/messages')) ?>">
+    <form method="get" action="<?= View::e(View::route('ui.messages')) ?>">
         <div class="filters">
             <label>
                 <span>Статус</span>
@@ -92,7 +92,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
 
         <div class="row filter-actions">
             <button class="primary" type="submit">Показать</button>
-            <a class="btn" href="<?= View::e(View::url('/messages')) ?>">Сбросить</a>
+            <a class="btn" href="<?= View::e(View::route('ui.messages')) ?>">Сбросить</a>
         </div>
     </form>
 </div>
@@ -127,7 +127,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                         <?php } ?>
                     </td>
                     <td>
-                        <a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>"><?= View::e(Str::limit((string) $row['subject'], 55) ?: '(без темы)') ?></a>
+                        <a href="<?= View::e(View::route('ui.messages.show', ['id' => $row['id']])) ?>"><?= View::e(Str::limit((string) $row['subject'], 55) ?: '(без темы)') ?></a>
                         <?php if (($row['tag'] ?? null) !== null) { ?>
                             <span class="badge muted"><?= View::e((string) $row['tag']) ?></span>
                         <?php } ?>
@@ -141,7 +141,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                     <td class="small hide-sm"><?= (int) $row['attempts'] ?> / <?= (int) $row['max_attempts'] ?></td>
                     <td class="small nowrap hide-sm"><?= View::e(Str::bytes((int) $row['size'])) ?></td>
                     <td class="nowrap hide-sm">
-                        <a href="<?= View::e(View::url('/messages/' . $row['id'])) ?>">открыть</a>
+                        <a href="<?= View::e(View::route('ui.messages.show', ['id' => $row['id']])) ?>">открыть</a>
                     </td>
                 </tr>
             <?php } ?>
@@ -153,7 +153,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
     </div>
 
     <?= View::partial('pagination', [
-        'path'   => '/messages',
+        'route'  => 'ui.messages',
         'page'   => $result['page'],
         'pages'  => $result['pages'],
         'params' => $filters,
@@ -162,7 +162,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
 
 <div class="card">
     <h2>Массовые действия</h2>
-    <form method="post" action="<?= View::e(View::url('/messages/bulk')) ?>" onsubmit="return confirm('Точно применить действие ко всем письмам выбранного статуса?')">
+    <form method="post" action="<?= View::e(View::route('ui.messages.bulk')) ?>" onsubmit="return confirm('Точно применить действие ко всем письмам выбранного статуса?')">
         <div class="row">
             <label style="margin:0">
                 <span>Статус</span>

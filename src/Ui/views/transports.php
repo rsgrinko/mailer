@@ -16,7 +16,7 @@ use Mailer\Ui\View;
 <div class="row">
     <h1 style="margin:0">Транспорты <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::url('/transports/new')) ?>">Добавить транспорт</a>
+    <a class="btn primary" href="<?= View::e(View::route('ui.transports.new')) ?>">Добавить транспорт</a>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -45,7 +45,7 @@ use Mailer\Ui\View;
                 ?>
                 <tr>
                     <td class="nowrap">
-                        <a href="<?= View::e(View::url('/transports/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
+                        <a href="<?= View::e(View::route('ui.transports.show', ['id' => $item['id']])) ?>"><?= View::e($item['name']) ?></a>
                         <?php if ((int) $item['is_default'] === 1) { ?><span class="badge sent">основной</span><?php } ?>
                     </td>
                     <td><?= View::e(View::transportType((string) $item['type'])) ?></td>
@@ -69,14 +69,14 @@ use Mailer\Ui\View;
                     </td>
                     <td class="nowrap">
                         <div class="row">
-                            <form method="post" action="<?= View::e(View::url('/transports/' . $item['id'] . '/test')) ?>">
+                            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'test'])) ?>">
                                 <button type="submit">проверить</button>
                             </form>
-                            <form method="post" action="<?= View::e(View::url('/transports/' . $item['id'] . '/toggle')) ?>">
+                            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'toggle'])) ?>">
                                 <button type="submit"><?= (int) $item['active'] === 1 ? 'выключить' : 'включить' ?></button>
                             </form>
                             <?php if ((int) $item['is_default'] !== 1) { ?>
-                                <form method="post" action="<?= View::e(View::url('/transports/' . $item['id'] . '/default')) ?>">
+                                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'default'])) ?>">
                                     <button type="submit">сделать основным</button>
                                 </form>
                             <?php } ?>
@@ -91,5 +91,5 @@ use Mailer\Ui\View;
         </table>
     </div>
 
-    <?= View::partial('pagination', ['path' => '/transports', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
+    <?= View::partial('pagination', ['route' => 'ui.transports', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
 </div>

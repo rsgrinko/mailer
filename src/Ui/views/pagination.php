@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Постраничная навигация. Общая для всех списков панели.
  *
- * @var string $path путь раздела, например '/messages'
+ * @var string $route имя маршрута раздела, например 'ui.messages'
  * @var int $page текущая страница
  * @var int $pages сколько всего страниц
  * @var array<string, mixed> $params что дописать в ссылку (фильтры)
@@ -34,7 +34,7 @@ if ($pages <= 1) {
         <?php if ($number === $page) { ?>
             <span class="current"><?= $number ?></span>
         <?php } else { ?>
-            <a href="<?= View::e(View::url($path, array_merge($params, ['page' => $number]))) ?>"><?= $number ?></a>
+            <a href="<?= View::e(View::route($route, array_merge($params, ['page' => $number]))) ?>"><?= $number ?></a>
         <?php } ?>
     <?php } ?>
 </div>

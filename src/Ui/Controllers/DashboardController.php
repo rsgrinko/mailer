@@ -151,7 +151,7 @@ final class DashboardController
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::url('/system'));
+        return Response::redirect(View::route('ui.system'));
     }
 
     /**

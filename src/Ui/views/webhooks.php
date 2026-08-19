@@ -17,13 +17,13 @@ use Mailer\Ui\View;
 <div class="row">
     <h1 style="margin:0">Вебхуки</h1>
     <div class="spacer"></div>
-    <form method="post" action="<?= View::e(View::url('/webhooks/process')) ?>">
+    <form method="post" action="<?= View::e(View::route('ui.webhooks.process')) ?>">
         <button class="primary" type="submit">Разослать сейчас</button>
     </form>
 </div>
 
 <div class="card" style="margin-top:16px">
-    <form method="get" action="<?= View::e(View::url('/webhooks')) ?>">
+    <form method="get" action="<?= View::e(View::route('ui.webhooks')) ?>">
         <div class="filters">
             <label>
                 <span>Статус</span>
@@ -51,7 +51,7 @@ use Mailer\Ui\View;
 
         <div class="row filter-actions">
             <button class="primary" type="submit">Показать</button>
-            <a class="btn" href="<?= View::e(View::url('/webhooks')) ?>">Сбросить</a>
+            <a class="btn" href="<?= View::e(View::route('ui.webhooks')) ?>">Сбросить</a>
         </div>
     </form>
 </div>
@@ -76,12 +76,12 @@ use Mailer\Ui\View;
                     <td class="nowrap">
                         <div class="row">
                             <?php if ($item['message_id'] !== null) { ?>
-                                <a href="<?= View::e(View::url('/messages/' . $item['message_id'])) ?>">письмо</a>
+                                <a href="<?= View::e(View::route('ui.messages.show', ['id' => $item['message_id']])) ?>">письмо</a>
                             <?php } ?>
-                            <form method="post" action="<?= View::e(View::url('/webhooks/' . $item['id'] . '/send')) ?>">
+                            <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'send'])) ?>">
                                 <button type="submit">отправить</button>
                             </form>
-                            <form method="post" action="<?= View::e(View::url('/webhooks/' . $item['id'] . '/delete')) ?>">
+                            <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'delete'])) ?>">
                                 <button class="danger" type="submit">удалить</button>
                             </form>
                         </div>
@@ -100,7 +100,7 @@ use Mailer\Ui\View;
     </div>
 
     <?= View::partial('pagination', [
-        'path'   => '/webhooks',
+        'route'  => 'ui.webhooks',
         'page'   => $result['page'],
         'pages'  => $result['pages'],
         'params' => $filters,

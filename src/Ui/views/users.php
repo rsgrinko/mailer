@@ -15,7 +15,7 @@ use Mailer\Ui\View;
 <div class="row">
     <h1 style="margin:0">Пользователи <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::url('/users/new')) ?>">Добавить пользователя</a>
+    <a class="btn primary" href="<?= View::e(View::route('ui.users.new')) ?>">Добавить пользователя</a>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -37,7 +37,7 @@ use Mailer\Ui\View;
                 <?php $isSelf = $current !== null && (int) $current['id'] === (int) $item['id']; ?>
                 <tr>
                     <td>
-                        <a href="<?= View::e(View::url('/users/' . $item['id'])) ?>"><?= View::e((string) $item['login']) ?></a>
+                        <a href="<?= View::e(View::route('ui.users.show', ['id' => $item['id']])) ?>"><?= View::e((string) $item['login']) ?></a>
                         <?php if ($isSelf) { ?>
                             <span class="muted small">— это вы</span>
                         <?php } ?>
@@ -59,10 +59,10 @@ use Mailer\Ui\View;
                     <td>
                         <?php if (!$isSelf) { ?>
                             <div class="row">
-                                <form method="post" action="<?= View::e(View::url('/users/' . $item['id'] . '/' . ((int) $item['active'] === 1 ? 'disable' : 'enable'))) ?>">
+                                <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $item['id'], 'action' => (int) $item['active'] === 1 ? 'disable' : 'enable'])) ?>">
                                     <button type="submit"><?= (int) $item['active'] === 1 ? 'Отключить' : 'Включить' ?></button>
                                 </form>
-                                <form method="post" action="<?= View::e(View::url('/users/' . $item['id'] . '/delete')) ?>" onsubmit="return confirm('Удалить пользователя?')">
+                                <form method="post" action="<?= View::e(View::route('ui.users.action', ['id' => $item['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить пользователя?')">
                                     <button class="danger" type="submit">Удалить</button>
                                 </form>
                             </div>
@@ -73,5 +73,5 @@ use Mailer\Ui\View;
         </table>
     </div>
 
-    <?= View::partial('pagination', ['path' => '/users', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
+    <?= View::partial('pagination', ['route' => 'ui.users', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
 </div>

@@ -57,7 +57,7 @@ final class TransportsController
         if ($id !== null && $transport === null) {
             View::flash('Транспорт не найден', 'error');
 
-            return Response::redirect(View::url('/transports'));
+            return Response::redirect(View::route('ui.transports'));
         }
 
         return Response::html(View::render('transport_form', [
@@ -136,10 +136,10 @@ final class TransportsController
         } catch (Throwable $e) {
             View::flash('Не сохранилось: ' . $e->getMessage(), 'error');
 
-            return Response::redirect(View::url($id > 0 ? '/transports/' . $id : '/transports/new'));
+            return Response::redirect($id > 0 ? View::route('ui.transports.show', ['id' => $id]) : View::route('ui.transports.new'));
         }
 
-        return Response::redirect(View::url('/transports/' . $id));
+        return Response::redirect(View::route('ui.transports.show', ['id' => $id]));
     }
 
     /**
@@ -152,7 +152,7 @@ final class TransportsController
         if ($transport === null) {
             View::flash('Транспорт не найден', 'error');
 
-            return Response::redirect(View::url('/transports'));
+            return Response::redirect(View::route('ui.transports'));
         }
 
         switch ($action) {
@@ -181,12 +181,12 @@ final class TransportsController
                 $this->transports->delete($id);
                 View::flash('Транспорт удалён');
 
-                return Response::redirect(View::url('/transports'));
+                return Response::redirect(View::route('ui.transports'));
 
             default:
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::url('/transports'));
+        return Response::redirect(View::route('ui.transports'));
     }
 }

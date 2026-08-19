@@ -18,10 +18,10 @@ $isNew = $template === null;
 <div class="row">
     <h1 style="margin:0"><?= $isNew ? 'Новый шаблон' : 'Шаблон «' . View::e((string) $template['name']) . '»' ?></h1>
     <div class="spacer"></div>
-    <a class="btn" href="<?= View::e(View::url('/templates')) ?>">К списку</a>
+    <a class="btn" href="<?= View::e(View::route('ui.templates')) ?>">К списку</a>
 </div>
 
-<form method="post" action="<?= View::e(View::url('/templates/save')) ?>">
+<form method="post" action="<?= View::e(View::route('ui.templates.save')) ?>">
     <input type="hidden" name="id" value="<?= (int) ($template['id'] ?? 0) ?>">
 
     <div class="card" style="margin-top:16px">
@@ -67,7 +67,7 @@ $isNew = $template === null;
 <?php if (!$isNew) { ?>
     <div class="card">
         <h2>Предпросмотр</h2>
-        <form method="get" action="<?= View::e(View::url('/templates/' . $template['id'])) ?>">
+        <form method="get" action="<?= View::e(View::route('ui.templates.show', ['id' => $template['id']])) ?>">
             <label>
                 <span>Данные для подстановки (JSON)</span>
                 <input type="text" name="sample" value="<?= View::e($sample) ?>" placeholder='{"name": "Иван", "site": "example.com"}'>
@@ -94,7 +94,7 @@ $isNew = $template === null;
     </div>
 
     <div class="card">
-        <form method="post" action="<?= View::e(View::url('/templates/' . $template['id'] . '/delete')) ?>" onsubmit="return confirm('Удалить шаблон?')">
+        <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить шаблон?')">
             <button class="danger" type="submit">Удалить шаблон</button>
         </form>
     </div>

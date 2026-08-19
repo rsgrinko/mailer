@@ -20,7 +20,7 @@ use Mailer\Ui\View;
             <div class="flash error"><?= View::e($error) ?></div>
         <?php } ?>
 
-        <form method="post" action="<?= View::e(View::url('/login')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.login')) ?>">
             <input type="hidden" name="next" value="<?= View::e($next) ?>">
 
             <label>

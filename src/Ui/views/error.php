@@ -14,5 +14,5 @@ use Mailer\Ui\View;
 
 <div class="card">
     <p><?= View::e($message) ?></p>
-    <a class="btn" href="<?= View::e(View::url('/')) ?>">На главную</a>
+    <a class="btn" href="<?= View::e(View::route('ui.dashboard')) ?>">На главную</a>
 </div>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Ui;
 
+use Mailer\Http\Router;
 use Mailer\Support\MailerException;
 
 /**
@@ -225,14 +226,13 @@ final class View
     }
 
     /**
-     * Ссылка с сохранением текущих фильтров.
+     * Адрес маршрута по его имени: View::route('ui.messages.show', ['id' => 5]).
+     * Лишние параметры уходят в query-строку — так удобно тащить фильтры по страницам.
      *
      * @param array<string, mixed> $params
      */
-    public static function url(string $path, array $params = []): string
+    public static function route(string $name, array $params = []): string
     {
-        $params = array_filter($params, static fn ($value): bool => $value !== '' && $value !== null);
-
-        return '/ui' . $path . ($params === [] ? '' : '?' . http_build_query($params));
+        return Router::url($name, array_filter($params, static fn ($value): bool => $value !== '' && $value !== null));
     }
 }

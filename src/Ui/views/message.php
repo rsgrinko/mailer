@@ -34,7 +34,7 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
     <h1 style="margin:0"><?= View::e((string) $message['subject'] ?: '(без темы)') ?></h1>
     <span class="badge <?= View::e($message['status']) ?>"><?= View::e(View::status((string) $message['status'])) ?></span>
     <div class="spacer"></div>
-    <a class="btn" href="<?= View::e(View::url('/messages')) ?>">К списку</a>
+    <a class="btn" href="<?= View::e(View::route('ui.messages')) ?>">К списку</a>
 </div>
 
 <?php
@@ -46,24 +46,24 @@ $isCanceled = (string) $message['status'] === 'canceled';
 <div class="card" style="margin-top:16px">
     <div class="row">
         <?php if (!$isSent) { ?>
-            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/send')) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'send'])) ?>">
                 <button class="primary" type="submit">Отправить сейчас</button>
             </form>
-            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/retry')) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'retry'])) ?>">
                 <button type="submit">Вернуть в очередь</button>
             </form>
         <?php } ?>
 
         <?php if (!$isSent && !$isCanceled) { ?>
-            <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/cancel')) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'cancel'])) ?>">
                 <button type="submit">Отменить</button>
             </form>
         <?php } ?>
 
-        <a class="btn" href="<?= View::e(View::url('/compose', ['copy' => $id])) ?>">Написать похожее</a>
-        <a class="btn" href="<?= View::e(View::url('/messages/' . $id . '/raw')) ?>">Скачать .eml</a>
+        <a class="btn" href="<?= View::e(View::route('ui.compose', ['copy' => $id])) ?>">Написать похожее</a>
+        <a class="btn" href="<?= View::e(View::route('ui.messages.raw', ['id' => $id])) ?>">Скачать .eml</a>
         <div class="spacer"></div>
-        <form method="post" action="<?= View::e(View::url('/messages/' . $id . '/delete')) ?>" onsubmit="return confirm('Удалить письмо вместе с историей и вложениями?')">
+        <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить письмо вместе с историей и вложениями?')">
             <button class="danger" type="submit">Удалить</button>
         </form>
     </div>
@@ -83,7 +83,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
             <dt>Проект</dt>
             <dd>
                 <?php if ($project !== null) { ?>
-                    <a href="<?= View::e(View::url('/projects/' . $project['id'])) ?>"><?= View::e($project['name']) ?></a>
+                    <a href="<?= View::e(View::route('ui.projects.show', ['id' => $project['id']])) ?>"><?= View::e($project['name']) ?></a>
                 <?php } else { ?>
                     <span class="muted">не задан</span>
                 <?php } ?>
@@ -91,7 +91,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
             <dt>Транспорт</dt>
             <dd>
                 <?php if ($transport !== null) { ?>
-                    <a href="<?= View::e(View::url('/transports/' . $transport['id'])) ?>"><?= View::e($transport['name']) ?></a>
+                    <a href="<?= View::e(View::route('ui.transports.show', ['id' => $transport['id']])) ?>"><?= View::e($transport['name']) ?></a>
                 <?php } else { ?>
                     <span class="muted">выбирается при отправке</span>
                 <?php } ?>
@@ -173,7 +173,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
                         <td class="small hide-sm"><?= View::e((string) ($attachment['content_type'] ?? '')) ?></td>
                         <td class="small"><?= View::e(Str::bytes((int) ($attachment['size'] ?? 0))) ?></td>
                         <td class="small hide-sm"><?= !empty($attachment['inline']) ? 'cid:' . View::e((string) ($attachment['cid'] ?? '')) : '—' ?></td>
-                        <td><a href="<?= View::e(View::url('/messages/' . $id . '/attachment', ['index' => $index])) ?>">скачать</a></td>
+                        <td><a href="<?= View::e(View::route('ui.messages.attachment', ['id' => $id, 'index' => $index])) ?>">скачать</a></td>
                     </tr>
                 <?php } ?>
             </table>

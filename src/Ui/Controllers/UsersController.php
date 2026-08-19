@@ -48,7 +48,7 @@ final class UsersController
         if ($id !== null && $user === null) {
             View::flash('Пользователь не найден', 'error');
 
-            return Response::redirect(View::url('/users'));
+            return Response::redirect(View::route('ui.users'));
         }
 
         return Response::html(View::render('user_form', [
@@ -86,7 +86,7 @@ final class UsersController
 
                 View::flash('Пользователь «' . $user['login'] . '» создан');
 
-                return Response::redirect(View::url('/users'));
+                return Response::redirect(View::route('ui.users'));
             }
 
             $current = Auth::user();
@@ -102,11 +102,11 @@ final class UsersController
 
             View::flash('Пользователь сохранён');
 
-            return Response::redirect(View::url('/users'));
+            return Response::redirect(View::route('ui.users'));
         } catch (Throwable $e) {
             View::flash($e->getMessage(), 'error');
 
-            return Response::redirect($id === 0 ? View::url('/users/new') : View::url('/users/' . $id));
+            return Response::redirect($id === 0 ? View::route('ui.users.new') : View::route('ui.users.show', ['id' => $id]));
         }
     }
 
@@ -121,7 +121,7 @@ final class UsersController
         if ($user === null) {
             View::flash('Пользователь не найден', 'error');
 
-            return Response::redirect(View::url('/users'));
+            return Response::redirect(View::route('ui.users'));
         }
 
         try {
@@ -158,6 +158,6 @@ final class UsersController
             View::flash($e->getMessage(), 'error');
         }
 
-        return Response::redirect(View::url('/users'));
+        return Response::redirect(View::route('ui.users'));
     }
 }

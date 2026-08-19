@@ -59,7 +59,7 @@ final class ProjectsController
         if ($id !== null && $project === null) {
             View::flash('Проект не найден', 'error');
 
-            return Response::redirect(View::url('/projects'));
+            return Response::redirect(View::route('ui.projects'));
         }
 
         $recent = [];
@@ -110,10 +110,10 @@ final class ProjectsController
         } catch (Throwable $e) {
             View::flash('Не сохранилось: ' . $e->getMessage(), 'error');
 
-            return Response::redirect(View::url($id > 0 ? '/projects/' . $id : '/projects/new'));
+            return Response::redirect($id > 0 ? View::route('ui.projects.show', ['id' => $id]) : View::route('ui.projects.new'));
         }
 
-        return Response::redirect(View::url('/projects/' . $id));
+        return Response::redirect(View::route('ui.projects.show', ['id' => $id]));
     }
 
     public function action(Request $request, int $id, string $action): Response
@@ -123,7 +123,7 @@ final class ProjectsController
         if ($project === null) {
             View::flash('Проект не найден', 'error');
 
-            return Response::redirect(View::url('/projects'));
+            return Response::redirect(View::route('ui.projects'));
         }
 
         switch ($action) {
@@ -141,12 +141,12 @@ final class ProjectsController
                 $this->projects->delete($id);
                 View::flash('Проект удалён. Его письма остались в истории.');
 
-                return Response::redirect(View::url('/projects'));
+                return Response::redirect(View::route('ui.projects'));
 
             default:
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::url('/projects/' . $id));
+        return Response::redirect(View::route('ui.projects.show', ['id' => $id]));
     }
 }

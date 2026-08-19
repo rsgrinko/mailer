@@ -32,11 +32,11 @@ final class PanelSetup
         Auth::start();
 
         if (Auth::check()) {
-            return Response::redirect(View::url('/'));
+            return Response::redirect(View::route('ui.dashboard'));
         }
 
         if ($this->users->count() > 0) {
-            return Response::redirect(View::url('/login'));
+            return Response::redirect(View::route('ui.login'));
         }
 
         return $next($request);

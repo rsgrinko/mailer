@@ -57,7 +57,7 @@ final class WebhooksController
         $count = (new WebhookSender())->processQueue(100);
         View::flash('Обработано вебхуков: ' . $count);
 
-        return Response::redirect(View::url('/webhooks'));
+        return Response::redirect(View::route('ui.webhooks'));
     }
 
     public function action(Request $request, int $id, string $action): Response
@@ -67,7 +67,7 @@ final class WebhooksController
         if ($item === null) {
             View::flash('Запись не найдена', 'error');
 
-            return Response::redirect(View::url('/webhooks'));
+            return Response::redirect(View::route('ui.webhooks'));
         }
 
         switch ($action) {
@@ -90,6 +90,6 @@ final class WebhooksController
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::url('/webhooks'));
+        return Response::redirect(View::route('ui.webhooks'));
     }
 }

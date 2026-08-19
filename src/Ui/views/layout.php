@@ -19,16 +19,16 @@ $user = $user ?? null;
 $bare = $bare ?? false;
 
 $menu = [
-    'dashboard'  => ['Обзор', '/'],
-    'messages'   => ['Письма', '/messages'],
-    'compose'    => ['Написать', '/compose'],
-    'transports' => ['Транспорты', '/transports'],
-    'projects'   => ['Проекты', '/projects'],
-    'templates'  => ['Шаблоны', '/templates'],
-    'webhooks'   => ['Вебхуки', '/webhooks'],
-    'users'      => ['Пользователи', '/users'],
-    'logs'       => ['Логи', '/logs'],
-    'system'     => ['Состояние', '/system'],
+    'dashboard'  => ['Обзор', 'ui.dashboard'],
+    'messages'   => ['Письма', 'ui.messages'],
+    'compose'    => ['Написать', 'ui.compose'],
+    'transports' => ['Транспорты', 'ui.transports'],
+    'projects'   => ['Проекты', 'ui.projects'],
+    'templates'  => ['Шаблоны', 'ui.templates'],
+    'webhooks'   => ['Вебхуки', 'ui.webhooks'],
+    'users'      => ['Пользователи', 'ui.users'],
+    'logs'       => ['Логи', 'ui.logs'],
+    'system'     => ['Состояние', 'ui.system'],
 ];
 ?>
 <!doctype html>
@@ -413,7 +413,7 @@ $menu = [
         <?php if ($user !== null) { ?>
             <span class="who">
                 <span class="muted small"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></span>
-                <form method="post" action="<?= View::e(View::url('/logout')) ?>">
+                <form method="post" action="<?= View::e(View::route('ui.logout')) ?>">
                     <button type="submit">Выйти</button>
                 </form>
             </span>
@@ -422,8 +422,8 @@ $menu = [
         <label class="burger" for="menu-toggle" title="Меню" aria-label="Меню">☰</label>
     </div>
     <nav>
-        <?php foreach ($menu as $key => [$label, $path]) { ?>
-            <a href="<?= View::e(View::url($path)) ?>" class="<?= $active === $key ? 'active' : '' ?>"><?= View::e($label) ?></a>
+        <?php foreach ($menu as $key => [$label, $route]) { ?>
+            <a href="<?= View::e(View::route($route)) ?>" class="<?= $active === $key ? 'active' : '' ?>"><?= View::e($label) ?></a>
         <?php } ?>
     </nav>
 </header>

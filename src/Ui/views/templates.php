@@ -15,7 +15,7 @@ use Mailer\Ui\View;
 <div class="row">
     <h1 style="margin:0">Шаблоны <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::url('/templates/new')) ?>">Создать шаблон</a>
+    <a class="btn primary" href="<?= View::e(View::route('ui.templates.new')) ?>">Создать шаблон</a>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -26,7 +26,7 @@ use Mailer\Ui\View;
             <?php foreach ($items as $item) { ?>
                 <tr>
                     <td>
-                        <a href="<?= View::e(View::url('/templates/' . $item['id'])) ?>"><?= View::e($item['name']) ?></a>
+                        <a href="<?= View::e(View::route('ui.templates.show', ['id' => $item['id']])) ?>"><?= View::e($item['name']) ?></a>
                         <?php if (($item['description'] ?? null) !== null) { ?>
                             <div class="muted small"><?= View::e((string) $item['description']) ?></div>
                         <?php } ?>
@@ -43,7 +43,7 @@ use Mailer\Ui\View;
         </table>
     </div>
 
-    <?= View::partial('pagination', ['path' => '/templates', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
+    <?= View::partial('pagination', ['route' => 'ui.templates', 'page' => $result['page'], 'pages' => $result['pages']]) ?>
 </div>
 
 <div class="card">

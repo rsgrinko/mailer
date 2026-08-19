@@ -24,7 +24,7 @@ use Mailer\Ui\View;
             <div class="flash error"><?= View::e($error) ?></div>
         <?php } ?>
 
-        <form method="post" action="<?= View::e(View::url('/setup')) ?>">
+        <form method="post" action="<?= View::e(View::route('ui.setup')) ?>">
             <label>
                 <span>Логин</span>
                 <input type="text" name="login" value="<?= View::e($login) ?>" autofocus required autocomplete="username">

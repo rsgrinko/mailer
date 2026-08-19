@@ -17,7 +17,7 @@ use Mailer\Ui\View;
 <h1>Логи</h1>
 
 <div class="card">
-    <form method="get" action="<?= View::e(View::url('/logs')) ?>">
+    <form method="get" action="<?= View::e(View::route('ui.logs')) ?>">
         <div class="row">
             <label style="margin:0; flex:2">
                 <span>Файл</span>

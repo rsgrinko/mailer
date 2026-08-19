@@ -19,10 +19,10 @@ $isNew    = $transport === null;
 <div class="row">
     <h1 style="margin:0"><?= $isNew ? 'Новый транспорт' : 'Транспорт «' . View::e((string) $transport['name']) . '»' ?></h1>
     <div class="spacer"></div>
-    <a class="btn" href="<?= View::e(View::url('/transports')) ?>">К списку</a>
+    <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">К списку</a>
 </div>
 
-<form method="post" action="<?= View::e(View::url('/transports/save')) ?>">
+<form method="post" action="<?= View::e(View::route('ui.transports.save')) ?>">
     <input type="hidden" name="id" value="<?= (int) ($transport['id'] ?? 0) ?>">
 
     <div class="grid cols-2" style="margin-top:16px">
@@ -193,7 +193,7 @@ $isNew    = $transport === null;
             <button class="primary" type="submit">Сохранить</button>
 
             <?php if (!$isNew) { ?>
-                <a class="btn" href="<?= View::e(View::url('/transports')) ?>">Отмена</a>
+                <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">Отмена</a>
                 <div class="spacer"></div>
             <?php } ?>
         </div>
@@ -203,11 +203,11 @@ $isNew    = $transport === null;
 <?php if (!$isNew) { ?>
     <div class="card">
         <div class="row">
-            <form method="post" action="<?= View::e(View::url('/transports/' . $transport['id'] . '/test')) ?>">
+            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'test'])) ?>">
                 <button type="submit">Проверить подключение</button>
             </form>
             <div class="spacer"></div>
-            <form method="post" action="<?= View::e(View::url('/transports/' . $transport['id'] . '/delete')) ?>" onsubmit="return confirm('Удалить транспорт?')">
+            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить транспорт?')">
                 <button class="danger" type="submit">Удалить транспорт</button>
             </form>
         </div>

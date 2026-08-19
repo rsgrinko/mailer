@@ -36,7 +36,7 @@ final class PanelAuth
         }
 
         if ($this->users->count() === 0) {
-            return Response::redirect(View::url('/setup'));
+            return Response::redirect(View::route('ui.setup'));
         }
 
         // Куда вернуть после входа: только для обычных переходов, POST повторять не будем
@@ -44,6 +44,6 @@ final class PanelAuth
             ? $request->path . ($request->query === [] ? '' : '?' . http_build_query($request->query))
             : '';
 
-        return Response::redirect(View::url('/login', $next !== '' ? ['next' => $next] : []));
+        return Response::redirect(View::route('ui.login', $next !== '' ? ['next' => $next] : []));
     }
 }

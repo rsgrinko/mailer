@@ -57,7 +57,7 @@ final class TemplatesController
         if ($id !== null && $template === null) {
             View::flash('Шаблон не найден', 'error');
 
-            return Response::redirect(View::url('/templates'));
+            return Response::redirect(View::route('ui.templates'));
         }
 
         $variables = $template === null ? [] : $this->renderer->variables(
@@ -106,10 +106,10 @@ final class TemplatesController
         } catch (Throwable $e) {
             View::flash('Не сохранилось: ' . $e->getMessage(), 'error');
 
-            return Response::redirect(View::url($id > 0 ? '/templates/' . $id : '/templates/new'));
+            return Response::redirect($id > 0 ? View::route('ui.templates.show', ['id' => $id]) : View::route('ui.templates.new'));
         }
 
-        return Response::redirect(View::url('/templates/' . $id));
+        return Response::redirect(View::route('ui.templates.show', ['id' => $id]));
     }
 
     public function action(Request $request, int $id, string $action): Response
@@ -119,18 +119,18 @@ final class TemplatesController
         if ($template === null) {
             View::flash('Шаблон не найден', 'error');
 
-            return Response::redirect(View::url('/templates'));
+            return Response::redirect(View::route('ui.templates'));
         }
 
         if ($action === 'delete') {
             $this->templates->delete($id);
             View::flash('Шаблон удалён');
 
-            return Response::redirect(View::url('/templates'));
+            return Response::redirect(View::route('ui.templates'));
         }
 
         View::flash('Неизвестное действие: ' . $action, 'error');
 
-        return Response::redirect(View::url('/templates/' . $id));
+        return Response::redirect(View::route('ui.templates.show', ['id' => $id]));
     }
 }

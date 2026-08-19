@@ -57,7 +57,7 @@ final class AuthController
         $this->users->touchLogin((int) $user['id'], $request->ip());
         $this->logger->info('Вход в панель', ['login' => $user['login'], 'ip' => $request->ip()]);
 
-        return Response::redirect($next !== '' ? $next : View::url('/'));
+        return Response::redirect($next !== '' ? $next : View::route('ui.dashboard'));
     }
 
     public function logout(Request $request): Response
@@ -71,7 +71,7 @@ final class AuthController
 
         View::flash('Вы вышли из панели');
 
-        return Response::redirect(View::url('/login'));
+        return Response::redirect(View::route('ui.login'));
     }
 
     /**
@@ -85,7 +85,7 @@ final class AuthController
     public function setup(Request $request): Response
     {
         if ($this->users->count() > 0) {
-            return Response::redirect(View::url('/login'));
+            return Response::redirect(View::route('ui.login'));
         }
 
         $login    = trim((string) $request->input('login', ''));
@@ -119,7 +119,7 @@ final class AuthController
 
         View::flash('Пользователь «' . $user['login'] . '» создан, вы вошли в панель');
 
-        return Response::redirect(View::url('/'));
+        return Response::redirect(View::route('ui.dashboard'));
     }
 
     /**
