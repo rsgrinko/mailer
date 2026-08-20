@@ -61,6 +61,14 @@ $isNew    = $transport === null;
                 <input type="text" name="from_name" value="<?= View::e((string) ($transport['from_name'] ?? '')) ?>">
             </label>
 
+            <label class="inline">
+                <input type="checkbox" name="force_from" <?= ($settings['force_from'] ?? false) ? 'checked' : '' ?>>
+                <span>Всегда отправлять от этого адреса</span>
+            </label>
+            <p class="muted small">Отправитель письма заменяется на адрес выше, прежний уходит в Reply-To.
+                Нужно для Яндекса и подобных: они шлют только от имени своего аккаунта и отвергают
+                чужой адрес с ответом «553 Sender address rejected».</p>
+
             <div class="row">
                 <label style="flex:1">
                     <span>Приоритет (меньше — раньше)</span>

@@ -25,7 +25,7 @@ final class TransportAddCommand extends Command
 
     public function usage(): string
     {
-        return 'transport:add <имя> --type=smtp --host= --port= --encryption= --user= --password= [--from=] [--from-name=] [--default]';
+        return 'transport:add <имя> --type=smtp --host= --port= --encryption= --user= --password= [--from=] [--from-name=] [--force-from] [--default]';
     }
 
     public function run(): int
@@ -63,6 +63,11 @@ final class TransportAddCommand extends Command
                 return 1;
             }
             $settings = ['transports' => array_map('trim', explode(',', $list))];
+        }
+
+        // Отправитель транспорта важнее того, что указал клиент
+        if (isset($this->options['force-from'])) {
+            $settings['force_from'] = true;
         }
 
         $id = (new TransportRepository())->create([

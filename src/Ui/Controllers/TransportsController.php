@@ -93,6 +93,11 @@ final class TransportsController extends ResourceController
             default => [],
         };
 
+        // Подмена отправителя — общая настройка, как и DKIM
+        if ($request->input('force_from') !== null) {
+            $settings['force_from'] = true;
+        }
+
         // DKIM — общая настройка для любого транспорта
         if ($request->input('dkim_enabled') !== null) {
             $settings['dkim'] = [

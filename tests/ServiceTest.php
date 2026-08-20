@@ -254,3 +254,97 @@ test('старые логи удаляются, сегодняшний оста�
     array_map('unlink', (array) glob($dir . '/*.log'));
     @rmdir($dir);
 });
+
+test('транспорт с force_from подменяет отправителя, прежний уходит в Reply-To', function (): void {
+    $transport = new class ('яндекс', [
+        'from_email' => 'robot@yandex.ru',
+        'from_name'  => 'Робот',
+        'force_from' => true,
+    ]) extends BaseTransport {
+        public function type(): string
+        {
+            return 'test';
+        }
+
+        public function send(Message $message): string
+        {
+            return $this->render($message);
+        }
+    };
+
+    $message = new Message();
+    $message->from = new Address('noreply@ahtori.local', 'Сайт');
+    $message->addTo('to@example.com');
+    $message->subject = 'Проверка подмены';
+    $message->text    = 'текст';
+
+    $mime = $transport->send($message);
+
+    assertSame('robot@yandex.ru', $message->from->email);
+    assertSame('robot@yandex.ru', $message->sender());
+    assertSame('noreply@ahtori.local', $message->replyTo?->email);
+    assertContains('robot@yandex.ru', $mime);
+});
+
+test('без force_from свой отправитель письма остаётся', function (): void {
+    $transport = new class ('обычный', ['from_email' => 'robot@yandex.ru']) extends BaseTransport {
+        public function type(): string
+        {
+            return 'test';
+        }
+
+        public function send(Message $message): string
+        {
+            return $this->render($message);
+        }
+    };
+
+    $message = new Message();
+    $message->from = new Address('shop@example.com');
+    $message->addTo('to@example.com');
+    $message->subject = 'Свой отправитель';
+    $message->text    = 'текст';
+
+    $transport->send($message);
+
+    assertSame('shop@example.com', $message->from->email);
+    assertSame(null, $message->replyTo);
+});
+
+test('force_from правит отправителя и в готовом письме', function (): void {
+    $transport = new class ('яндекс', [
+        'from_email' => 'robot@yandex.ru',
+        'force_from' => true,
+    ]) extends BaseTransport {
+        public function type(): string
+        {
+            return 'test';
+        }
+
+        public function send(Message $message): string
+        {
+            return $this->render($message);
+        }
+    };
+
+    $raw = "From: Сайт <noreply@ahtori.local>\r\n"
+        . "To: to@example.com\r\n"
+        . "Subject: Готовое письмо\r\n"
+        . "\r\n"
+        . "тело";
+
+    $message = new Message();
+    $message->raw          = $raw;
+    $message->from         = new Address('noreply@ahtori.local', 'Сайт');
+    $message->envelopeFrom = 'noreply@ahtori.local';
+    $message->addTo('to@example.com');
+    $message->subject = 'Готовое письмо';
+
+    $mime = $transport->send($message);
+
+    assertSame('robot@yandex.ru', $message->sender());
+    assertContains('From: robot@yandex.ru', $mime);
+    assertContains('Reply-To:', $mime);
+    assertTrue(!str_contains($mime, 'From: Сайт'), 'старый From должен исчезнуть');
+    assertContains('тело', $mime);
+});

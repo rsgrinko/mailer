@@ -108,6 +108,20 @@ final class MimeParser
     }
 
     /**
+     * Заменяет заголовок в готовом письме: старый убирается, новый встаёт первым.
+     * Нужно транспорту, который подменяет отправителя в уже собранном письме.
+     */
+    public static function setHeader(string $raw, string $name, string $value): string
+    {
+        [$head, $body] = self::split(self::removeHeader($raw, $name));
+
+        $head = trim($head, "\r\n");
+        $line = $name . ': ' . $value;
+
+        return ($head === '' ? $line : $line . "\r\n" . $head) . "\r\n\r\n" . $body;
+    }
+
+    /**
      * Разбирает письмо целиком.
      *
      * @return array{
