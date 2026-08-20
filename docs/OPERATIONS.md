@@ -252,9 +252,23 @@ scrape_configs:
   - job_name: mailer
     static_configs:
       - targets: ['mail.internal']
+        labels:
+          env: prod
+          project: mailer
     authorization:
       credentials: секретный-токен
 ```
+
+Токен можно передать и параметром — так удобнее, когда заголовки правит прокси:
+
+```yaml
+    params:
+      token: ['секретный-токен']
+```
+
+Готовый дашборд для Grafana лежит в `deploy/grafana-dashboard.json` — импортируется как есть
+(Dashboards → New → Import → Upload JSON). Источник данных, сервис (`job`), контур (`env`)
+и узел выбираются наверху страницы, так что под свой Prometheus его править не нужно.
 
 На что стоит завести оповещения:
 
