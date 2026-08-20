@@ -226,11 +226,30 @@ mu-плагином (`mu-plugins/`): такие функции `function_exists`
 
 Подробности — в `integrations/wordpress/mailerservice/README.md`.
 
+## 6. Laravel — пакет
+
+Для проектов на Laravel есть composer-пакет `rsgrinko/laravel-mailerservice-sdk`
+(`integrations/laravel/`): почтовый транспорт для `config/mail.php` и клиент API
+с фасадом `MailService`.
+
+```bash
+composer require rsgrinko/laravel-mailerservice-sdk
+php bin/mailer key:create laravel
+```
+
+В `config/mail.php` добавляется мейлер с транспортом `mailerservice`, адрес сервиса
+и ключ — в `.env` (`MAILERSERVICE_URL`, `MAILERSERVICE_KEY`). Дальше `Mail::to(...)->send(...)`
+работает как раньше, а письма уходят сервису по HTTP API: тема, адреса, тела, вложения,
+картинки в HTML, метка и метаданные раскладываются автоматически.
+
+Подробности — в `integrations/laravel/README.md`.
+
 ## Что выбрать
 
 | Ситуация | Способ |
 |----------|--------|
 | Свой PHP-проект | SDK |
+| Проект на Laravel | пакет `rsgrinko/laravel-mailerservice-sdk` |
 | DokuWiki | плагин `mailerservice` |
 | WordPress | плагин `mailerservice` |
 | Старое PHP-приложение, код трогать нельзя | подмена sendmail |
