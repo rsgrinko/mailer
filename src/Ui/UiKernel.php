@@ -9,6 +9,7 @@ use Mailer\Http\Response;
 use Mailer\Http\Router;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
+use Mailer\Ui\Middleware\Can;
 use Mailer\Ui\Middleware\CsrfGuard;
 use Mailer\Ui\Middleware\PanelAuth;
 use Mailer\Ui\Middleware\PanelGuest;
@@ -16,12 +17,13 @@ use Mailer\Ui\Middleware\PanelSetup;
 use Throwable;
 
 /**
- * Веб-панель. Вход по логину и паролю (пользователи в таблице users, права у всех едины);
- * авторизацию можно выключить настройкой UI_AUTH, если панель уже закрыта на nginx.
- * Всё, что есть в базе, видно и управляется отсюда: очередь, письма, транспорты,
+ * Веб-панель. Вход по логину и паролю (пользователи в таблице users), права приходят
+ * из роли; авторизацию можно выключить настройкой UI_AUTH, если панель уже закрыта
+ * на nginx — тогда доступно всё. Отсюда управляется очередь, письма, транспорты,
  * проекты, шаблоны, вебхуки, логи и состояние сервиса.
  *
- * Маршруты и то, кого куда пускать, описаны в routes/ui.php.
+ * Маршруты и то, кого куда пускать, описаны в routes/ui.php: прослойка can у группы
+ * закрывает раздел, а Scope внутри репозиториев решает, чьи записи в нём видно.
  */
 final class UiKernel
 {
@@ -74,6 +76,7 @@ final class UiKernel
         if ($this->router === null) {
             $this->router = (new Router())
                 ->middleware('csrf', new CsrfGuard())
+                ->middleware('can', new Can())
                 ->middleware('panel-auth', new PanelAuth())
                 ->middleware('panel-guest', new PanelGuest())
                 ->middleware('panel-setup', new PanelSetup())

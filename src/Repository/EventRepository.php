@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Storage\Database;
 
 /**
@@ -68,12 +69,17 @@ final class EventRepository
      *
      * @return array<int, array<string, mixed>>
      */
-    public function latest(int $limit = 50): array
+    public function latest(int $limit = 50, ?Scope $scope = null): array
     {
+        // Событие принадлежит письму, поэтому и область видимости берём у письма
+        $condition = $scope === null ? '' : $scope->sql('m.owner_id');
+
         return $this->db->select(
             'SELECT e.*, m.uuid, m.subject FROM message_events e
-             LEFT JOIN messages m ON m.id = e.message_id
-             ORDER BY e.id DESC LIMIT ' . max(1, $limit)
+             LEFT JOIN messages m ON m.id = e.message_id'
+            . ($condition === '' ? '' : ' WHERE ' . $condition)
+            . ' ORDER BY e.id DESC LIMIT ' . max(1, $limit),
+            $scope === null ? [] : $scope->params()
         );
     }
 

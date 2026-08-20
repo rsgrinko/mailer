@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Permission;
+use Mailer\Domain\Scope;
+use Mailer\Domain\Viewer;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\MailService;
@@ -58,7 +61,7 @@ final class MessagesController
     /**
      * Список писем с фильтрами.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         $filters = [
             'status'       => (string) $request->query('status', ''),
@@ -74,25 +77,26 @@ final class MessagesController
         $result = $this->messages->paginate(
             $filters,
             (int) $request->query('page', 1),
-            (int) $request->query('per_page', (int) Config::get('ui.per_page', 30))
+            (int) $request->query('per_page', (int) Config::get('ui.per_page', 30)),
+            $scope
         );
 
         return Response::html(View::render('messages', [
             'active'     => 'messages',
             'result'     => $result,
             'filters'    => $filters,
-            'projects'   => $this->projects->all(),
-            'transports' => $this->transports->all(),
-            'counts'     => $this->messages->countByStatus(),
+            'projects'   => $this->projects->all($scope),
+            'transports' => $this->transports->all(false, $scope),
+            'counts'     => $this->messages->countByStatus($scope),
         ], 'Письма'));
     }
 
     /**
      * Карточка письма: всё, что о нём известно.
      */
-    public function show(Request $request, int $id): Response
+    public function show(Request $request, int $id, Scope $scope): Response
     {
-        $row = $this->messages->find($id);
+        $row = $this->messages->find($id, $scope);
 
         if ($row === null) {
             View::flash('Письмо не найдено', 'error');
@@ -132,9 +136,9 @@ final class MessagesController
             'attachments' => $this->messages->decodeArray($row['attachments_json'] ?? null),
             'events'      => $events,
             'senderUsed'  => $this->senderUsed($row, $events),
-            'project'     => $row['project_id'] !== null ? $this->projects->find((int) $row['project_id']) : null,
-            'transport'   => $row['transport_id'] !== null ? $this->transports->find((int) $row['transport_id']) : null,
-            'webhooks'    => $this->webhooks->paginate(['message_id' => $id], 1, 20)['items'],
+            'project'     => $row['project_id'] !== null ? $this->projects->find((int) $row['project_id'], $scope) : null,
+            'transport'   => $row['transport_id'] !== null ? $this->transports->find((int) $row['transport_id'], $scope) : null,
+            'webhooks'    => $this->webhooks->paginate(['message_id' => $id], 1, 20, $scope)['items'],
             'mime'        => $mime,
             'preview'     => $preview,
         ], 'Письмо'));
@@ -179,7 +183,7 @@ final class MessagesController
     /**
      * Действия над письмом: повторить, отменить, отправить сейчас, удалить.
      */
-    public function action(Request $request, int $id, string $action): Response
+    public function action(Request $request, int $id, string $action, Scope $scope, Viewer $viewer): Response
     {
         if (!(bool) Config::get('ui.allow_actions', true)) {
             View::flash('Действия из панели отключены настройкой UI_ALLOW_ACTIONS', 'error');
@@ -187,11 +191,21 @@ final class MessagesController
             return Response::redirect(View::route('ui.messages.show', ['id' => $id]));
         }
 
-        $row = $this->messages->find($id);
+        $row = $this->messages->find($id, $scope);
         if ($row === null) {
             View::flash('Письмо не найдено', 'error');
 
             return Response::redirect(View::route('ui.messages'));
+        }
+
+        // На маршруте право общее на все кнопки, поэтому сверяем каждую отдельно:
+        // «отправить сейчас» доступно и тому, кто умеет только писать письма
+        $required = $action === 'send' ? Permission::MESSAGES_SEND : Permission::MESSAGES_MANAGE;
+
+        if (!$viewer->can($required)) {
+            View::flash('Нет прав на это действие', 'error');
+
+            return Response::redirect(View::route('ui.messages.show', ['id' => $id]));
         }
 
         switch ($action) {
@@ -239,13 +253,13 @@ final class MessagesController
     /**
      * Массовые действия из списка.
      */
-    public function bulk(Request $request): Response
+    public function bulk(Request $request, Scope $scope): Response
     {
         $action = (string) $request->input('action', '');
         $status = (string) $request->input('status', MessageRepository::FAILED);
         $count  = 0;
 
-        $page = $this->messages->paginate(['status' => $status], 1, 500);
+        $page = $this->messages->paginate(['status' => $status], 1, 500, $scope);
 
         // Пачка обрабатывается одной транзакцией: либо применилось ко всем письмам, либо ни к одному
         Database::instance()->transaction(function () use ($page, $action, &$count): void {
@@ -271,9 +285,9 @@ final class MessagesController
     /**
      * Скачать письмо целиком в формате .eml.
      */
-    public function raw(Request $request, int $id): Response
+    public function raw(Request $request, int $id, Scope $scope): Response
     {
-        $row = $this->messages->find($id);
+        $row = $this->messages->find($id, $scope);
         if ($row === null) {
             return Response::text('Письмо не найдено', 404);
         }
@@ -288,9 +302,9 @@ final class MessagesController
     /**
      * Скачать вложение.
      */
-    public function attachment(Request $request, int $id): Response
+    public function attachment(Request $request, int $id, Scope $scope): Response
     {
-        $row = $this->messages->find($id);
+        $row = $this->messages->find($id, $scope);
         if ($row === null) {
             return Response::text('Письмо не найдено', 404);
         }
@@ -318,14 +332,14 @@ final class MessagesController
     /**
      * Форма отправки письма прямо из панели.
      */
-    public function composeForm(Request $request): Response
+    public function composeForm(Request $request, Scope $scope): Response
     {
         $prefill = [];
 
         // Можно открыть форму, подставив данные существующего письма
         $copyId = (int) $request->query('copy', 0);
         if ($copyId > 0) {
-            $row = $this->messages->find($copyId);
+            $row = $this->messages->find($copyId, $scope);
             if ($row !== null) {
                 $prefill = [
                     'to'        => implode(', ', array_column($this->messages->decodeArray($row['to_json'] ?? null), 'email')),
@@ -340,9 +354,9 @@ final class MessagesController
 
         return Response::html(View::render('compose', [
             'active'     => 'compose',
-            'transports' => $this->transports->all(),
-            'templates'  => $this->templates->all(),
-            'projects'   => $this->projects->all(),
+            'transports' => $this->transports->all(false, $scope),
+            'templates'  => $this->templates->all($scope),
+            'projects'   => $this->projects->all($scope),
             'prefill'    => $prefill,
         ], 'Написать письмо'));
     }
@@ -350,7 +364,7 @@ final class MessagesController
     /**
      * Отправка письма из панели.
      */
-    public function compose(Request $request): Response
+    public function compose(Request $request, Scope $scope, Viewer $viewer): Response
     {
         $payload = [
             'to'      => (string) $request->input('to', ''),
@@ -383,7 +397,7 @@ final class MessagesController
 
         $transportId = (int) $request->input('transport_id', 0);
         if ($transportId > 0) {
-            $transport = $this->transports->find($transportId);
+            $transport = $this->transports->find($transportId, $scope);
             if ($transport !== null) {
                 $payload['transport'] = (string) $transport['name'];
             }
@@ -392,11 +406,11 @@ final class MessagesController
         $project   = null;
         $projectId = (int) $request->input('project_id', 0);
         if ($projectId > 0) {
-            $project = $this->projects->find($projectId);
+            $project = $this->projects->find($projectId, $scope);
         }
 
         try {
-            $result = $this->service->accept($payload, $project, MessageRepository::SOURCE_UI);
+            $result = $this->service->accept($payload, $project, MessageRepository::SOURCE_UI, $viewer->id());
 
             View::flash(
                 'Письмо ' . $result['uuid'] . ': ' . $result['status']

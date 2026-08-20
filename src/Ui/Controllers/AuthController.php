@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Permission;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
+use Mailer\Repository\RoleRepository;
 use Mailer\Repository\UserRepository;
 use Mailer\Support\Logger;
+use Mailer\Support\MailerException;
 use Mailer\Ui\Auth;
 use Mailer\Ui\View;
 use Throwable;
@@ -18,11 +21,13 @@ use Throwable;
 final class AuthController
 {
     private UserRepository $users;
+    private RoleRepository $roles;
     private Logger $logger;
 
-    public function __construct(UserRepository $users)
+    public function __construct(UserRepository $users, RoleRepository $roles)
     {
         $this->users  = $users;
+        $this->roles  = $roles;
         $this->logger = new Logger('ui');
     }
 
@@ -75,6 +80,58 @@ final class AuthController
     }
 
     /**
+     * Свой профиль: имя и пароль. Доступен без прав — иначе пользователь без
+     * users.manage не сменил бы себе даже пароль.
+     */
+    public function profileForm(Request $request): Response
+    {
+        // С выключенной авторизацией пользователя нет вовсе — показываем это прямо,
+        // а не редиректом: страница есть, менять на ней нечего
+        $user = Auth::user() ?? [
+            'id'          => 0,
+            'login'       => '—',
+            'name'        => '',
+            'role_name'   => 'авторизация панели выключена',
+            'permissions' => Permission::all(),
+        ];
+
+        return Response::html(View::render('profile', [
+            'active' => '',
+            'person' => $user,
+        ], 'Мой профиль'));
+    }
+
+    public function profile(Request $request): Response
+    {
+        $user = Auth::user();
+
+        if ($user === null) {
+            return Response::redirect(View::route('ui.dashboard'));
+        }
+
+        $id       = (int) $user['id'];
+        $password = (string) $request->input('password', '');
+
+        try {
+            $this->users->update($id, ['name' => trim((string) $request->input('name', ''))]);
+
+            if ($password !== '') {
+                if ($password !== (string) $request->input('password_repeat', '')) {
+                    throw new MailerException('Пароли не совпадают');
+                }
+
+                $this->users->setPassword($id, $password);
+            }
+
+            View::flash('Профиль сохранён');
+        } catch (Throwable $e) {
+            View::flash($e->getMessage(), 'error');
+        }
+
+        return Response::redirect(View::route('ui.profile'));
+    }
+
+    /**
      * Первый запуск: пользователей ещё нет, заводим себя сами.
      */
     public function setupForm(Request $request): Response
@@ -100,11 +157,15 @@ final class AuthController
         }
 
         try {
+            // Первый пользователь получает роль администратора: больше её выдать некому
+            $admin = $this->roles->admin();
+
             $user = $this->users->create([
                 'login'    => $login,
                 'password' => $password,
                 'name'     => trim((string) $request->input('name', '')),
                 'active'   => true,
+                'role_id'  => $admin === null ? 0 : (int) $admin['id'],
             ]);
         } catch (Throwable $e) {
             return Response::html(View::renderBare('setup', [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Scope;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Queue\Queue;
@@ -54,25 +55,30 @@ final class DashboardController
     /**
      * Дашборд: цифры, график, состояние воркера и последние события.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         // График за две недели считается по всей таблице, поэтому держим его
-        // несколько секунд в кэше: на обзоре секундная точность не нужна
+        // несколько секунд в кэше: на обзоре секундная точность не нужна.
+        // Ключ кэша — с владельцем, иначе первый зашедший покажет свой график всем
         $ttl = (int) Config::get('ui.stats_cache', 30);
 
-        $stats = $this->messages->stats();
-        $daily = Cache::remember('dashboard:daily', $ttl, fn (): array => $this->messages->dailyStats(14));
+        $stats = $this->messages->stats($scope);
+        $daily = Cache::remember(
+            'dashboard:daily:' . $scope->ownerId(),
+            $ttl,
+            fn (): array => $this->messages->dailyStats(14, $scope)
+        );
 
         return Response::html(View::render('dashboard', [
             'active'     => 'dashboard',
             'stats'      => $stats,
             'daily'      => $daily,
             'worker'     => $this->workerState(),
-            'recent'     => $this->messages->paginate([], 1, 10)['items'],
-            'failed'     => $this->messages->paginate(['status' => MessageRepository::FAILED], 1, 5)['items'],
-            'events'     => $this->events->latest(12),
-            'transports' => $this->transports->all(),
-            'webhooks'   => $this->webhooks->countByStatus(),
+            'recent'     => $this->messages->paginate([], 1, 10, $scope)['items'],
+            'failed'     => $this->messages->paginate(['status' => MessageRepository::FAILED], 1, 5, $scope)['items'],
+            'events'     => $this->events->latest(12, $scope),
+            'transports' => $this->transports->all(false, $scope),
+            'webhooks'   => $this->webhooks->countByStatus($scope),
         ], 'Обзор'));
     }
 

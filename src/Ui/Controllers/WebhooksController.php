@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Scope;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\ProjectRepository;
@@ -28,7 +29,7 @@ final class WebhooksController
         $this->projects = $projects;
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         $result = $this->webhooks->paginate(
             [
@@ -36,14 +37,15 @@ final class WebhooksController
                 'project_id' => (string) $request->query('project_id', ''),
             ],
             (int) $request->query('page', 1),
-            (int) Config::get('ui.per_page', 30)
+            (int) Config::get('ui.per_page', 30),
+            $scope
         );
 
         return Response::html(View::render('webhooks', [
             'active'   => 'webhooks',
             'result'   => $result,
-            'counts'   => $this->webhooks->countByStatus(),
-            'projects' => $this->projects->all(),
+            'counts'   => $this->webhooks->countByStatus($scope),
+            'projects' => $this->projects->all($scope),
             'filters'  => [
                 'status'     => (string) $request->query('status', ''),
                 'project_id' => (string) $request->query('project_id', ''),
@@ -62,9 +64,9 @@ final class WebhooksController
         return Response::redirect(View::route('ui.webhooks'));
     }
 
-    public function action(Request $request, int $id, string $action): Response
+    public function action(Request $request, int $id, string $action, Scope $scope): Response
     {
-        $item = $this->webhooks->find($id);
+        $item = $this->webhooks->find($id, $scope);
 
         if ($item === null) {
             View::flash('Запись не найдена', 'error');

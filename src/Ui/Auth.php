@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Ui;
 
+use Mailer\Domain\Viewer;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
@@ -102,6 +103,19 @@ final class Auth
     public static function check(): bool
     {
         return self::user() !== null;
+    }
+
+    /**
+     * Кто смотрит панель: права и область видимости. Авторизация выключена —
+     * значит спрашивать некого и доступно всё, как было до разделения прав.
+     */
+    public static function viewer(): Viewer
+    {
+        if (!self::enabled()) {
+            return Viewer::full();
+        }
+
+        return Viewer::fromUser(self::user() ?? []);
     }
 
     /**

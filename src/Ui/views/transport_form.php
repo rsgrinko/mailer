@@ -7,6 +7,9 @@ declare(strict_types=1);
  *
  * @var array<string, mixed>|null $transport
  * @var array<int, array<string, mixed>> $all
+ * @var array<int, array<string, mixed>> $owners пользователи для выбора владельца (только администратору)
+ * @var bool $canShare можно ли делать транспорт общим и основным
+ * @var bool $readOnly чужой или общий транспорт: смотреть можно, менять нельзя
  */
 
 use Mailer\Ui\View;
@@ -85,11 +88,31 @@ $isNew    = $transport === null;
                 <input type="checkbox" name="active" <?= $isNew || (int) $transport['active'] === 1 ? 'checked' : '' ?>>
                 <span>Включён</span>
             </label>
-            <br>
-            <label class="inline">
-                <input type="checkbox" name="is_default" <?= !$isNew && (int) $transport['is_default'] === 1 ? 'checked' : '' ?>>
-                <span>Использовать по умолчанию</span>
-            </label>
+
+            <?php if ($canShare) { ?>
+                <br>
+                <label class="inline">
+                    <input type="checkbox" name="is_default" <?= !$isNew && (int) $transport['is_default'] === 1 ? 'checked' : '' ?>>
+                    <span>Использовать по умолчанию</span>
+                </label>
+                <br>
+                <label class="inline">
+                    <input type="checkbox" name="shared" <?= !$isNew && (int) ($transport['shared'] ?? 0) === 1 ? 'checked' : '' ?>>
+                    <span>Общий: виден всем пользователям</span>
+                </label>
+
+                <label>
+                    <span>Владелец</span>
+                    <select name="owner_id">
+                        <option value="0">— общий, без владельца —</option>
+                        <?php foreach ($owners as $owner) { ?>
+                            <option value="<?= (int) $owner['id'] ?>" <?= (int) ($transport['owner_id'] ?? 0) === (int) $owner['id'] ? 'selected' : '' ?>>
+                                <?= View::e((string) $owner['login']) ?>
+                            </option>
+                        <?php } ?>
+                    </select>
+                </label>
+            <?php } ?>
         </div>
 
         <div class="card">
@@ -199,14 +222,21 @@ $isNew    = $transport === null;
     </div>
 
     <div class="card">
-        <div class="row">
-            <button class="primary" type="submit">Сохранить</button>
+        <?php if ($readOnly) { ?>
+            <p class="muted small" style="margin:0">
+                Транспорт заведён администратором и доступен вам только на просмотр:
+                отправлять через него можно, менять настройки — нет.
+            </p>
+        <?php } else { ?>
+            <div class="row">
+                <button class="primary" type="submit">Сохранить</button>
 
-            <?php if (!$isNew) { ?>
-                <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">Отмена</a>
-                <div class="spacer"></div>
-            <?php } ?>
-        </div>
+                <?php if (!$isNew) { ?>
+                    <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">Отмена</a>
+                    <div class="spacer"></div>
+                <?php } ?>
+            </div>
+        <?php } ?>
     </div>
 </form>
 
@@ -218,10 +248,12 @@ $isNew    = $transport === null;
                 <button type="submit">Проверить подключение</button>
             </form>
             <div class="spacer"></div>
-            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить транспорт?')">
-                <?= View::csrf() ?>
-                <button class="danger" type="submit">Удалить транспорт</button>
-            </form>
+            <?php if (!$readOnly) { ?>
+                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить транспорт?')">
+                    <?= View::csrf() ?>
+                    <button class="danger" type="submit">Удалить транспорт</button>
+                </form>
+            <?php } ?>
         </div>
     </div>
 <?php } ?>

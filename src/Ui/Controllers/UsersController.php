@@ -6,6 +6,7 @@ namespace Mailer\Ui\Controllers;
 
 use Mailer\Http\Request;
 use Mailer\Http\Response;
+use Mailer\Repository\RoleRepository;
 use Mailer\Repository\UserRepository;
 use Mailer\Security\Password;
 use Mailer\Support\Config;
@@ -15,16 +16,20 @@ use Mailer\Ui\View;
 use Throwable;
 
 /**
- * Пользователи панели. Права у всех одинаковые, поэтому управлять ими может любой вошедший.
+ * Пользователи панели: логины, пароли и выданная роль. Права приходят из роли,
+ * поэтому раздел закрыт правом users.manage.
  */
 final class UsersController extends ResourceController
 {
     private UserRepository $users;
+    private RoleRepository $roles;
 
     public function __construct(
-        UserRepository $users
+        UserRepository $users,
+        RoleRepository $roles
     ) {
         $this->users = $users;
+        $this->roles = $roles;
     }
 
     public function index(Request $request): Response
@@ -50,6 +55,7 @@ final class UsersController extends ResourceController
             'active'  => 'users',
             'user'    => $user,
             'current' => Auth::user(),
+            'roles'   => $this->roles->all(),
         ], $user === null ? 'Новый пользователь' : 'Пользователь «' . $user['login'] . '»'));
     }
 
@@ -61,6 +67,7 @@ final class UsersController extends ResourceController
         $password = (string) $request->input('password', '');
         $repeat   = (string) $request->input('password_repeat', '');
         $active   = $request->input('active') !== null;
+        $roleId   = (int) $request->input('role_id', 0);
 
         try {
             if ($password !== '' && $password !== $repeat) {
@@ -77,6 +84,7 @@ final class UsersController extends ResourceController
                     'name'     => $name,
                     'password' => $password,
                     'active'   => $active,
+                    'role_id'  => $roleId,
                 ]);
 
                 View::flash('Пользователь «' . $user['login'] . '» создан');
@@ -89,7 +97,12 @@ final class UsersController extends ResourceController
                 throw new MailerException('Нельзя отключить самого себя');
             }
 
-            $this->users->update($id, ['login' => $login, 'name' => $name, 'active' => $active]);
+            $this->users->update($id, [
+                'login'   => $login,
+                'name'    => $name,
+                'active'  => $active,
+                'role_id' => $roleId,
+            ]);
 
             if ($password !== '') {
                 $this->users->setPassword($id, $password);

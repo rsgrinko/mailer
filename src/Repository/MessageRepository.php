@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Message\Address;
 use Mailer\Message\Attachment;
 use Mailer\Message\Message;
@@ -43,7 +44,7 @@ final class MessageRepository
     /**
      * Сохраняет письмо в базу и возвращает его id.
      *
-     * @param array<string, mixed> $options project_id, transport_id, source, status,
+     * @param array<string, mixed> $options project_id, owner_id, transport_id, source, status,
      *                                      available_at, max_attempts, template, template_data,
      *                                      idempotency_key
      */
@@ -54,6 +55,7 @@ final class MessageRepository
         return $this->db->insert('messages', [
             'uuid'             => $uuid,
             'project_id'       => $options['project_id'] ?? null,
+            'owner_id'         => (int) ($options['owner_id'] ?? 0),
             'transport_id'     => $options['transport_id'] ?? null,
             'status'           => (string) ($options['status'] ?? self::QUEUED),
             'priority'         => (int) ($options['priority'] ?? $message->priority),
@@ -91,9 +93,14 @@ final class MessageRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(int $id): ?array
+    public function find(int $id, ?Scope $scope = null): ?array
     {
-        return $this->db->selectOne('SELECT * FROM messages WHERE id = :id', ['id' => $id]);
+        $condition = $scope === null ? '' : $scope->sql();
+
+        return $this->db->selectOne(
+            'SELECT * FROM messages WHERE id = :id' . ($condition === '' ? '' : ' AND ' . $condition),
+            array_merge(['id' => $id], $scope === null ? [] : $scope->params())
+        );
     }
 
     /**
@@ -182,15 +189,15 @@ final class MessageRepository
      * @param array<string, mixed> $filters status, project_id, transport_id, source, search, tag, date_from, date_to
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    public function paginate(array $filters = [], int $page = 1, int $perPage = 30): array
+    public function paginate(array $filters = [], int $page = 1, int $perPage = 30, ?Scope $scope = null): array
     {
-        $result = $this->search($filters, $page, $perPage, $this->hasFulltextIndex());
+        $result = $this->search($filters, $page, $perPage, $this->hasFulltextIndex(), $scope);
 
         // Полнотекстовый индекс ищет слова целиком и их начала, поэтому «mail» не найдёт
         // «gmail.com». Если по словам нашлось меньше страницы, повторяем перебором —
         // пользователь получает полный ответ, а быстрый путь остаётся для широких запросов.
         if (!empty($filters['search']) && $result['total'] < $perPage && $this->hasFulltextIndex()) {
-            return $this->search($filters, $page, $perPage, false);
+            return $this->search($filters, $page, $perPage, false, $scope);
         }
 
         return $result;
@@ -202,9 +209,9 @@ final class MessageRepository
      * @param array<string, mixed> $filters
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    private function search(array $filters, int $page, int $perPage, bool $fulltext): array
+    private function search(array $filters, int $page, int $perPage, bool $fulltext, ?Scope $scope = null): array
     {
-        [$where, $params] = $this->buildWhere($filters, $fulltext);
+        [$where, $params] = $this->buildWhere($filters, $fulltext, $scope);
 
         $total = (int) $this->db->value('SELECT COUNT(*) FROM messages ' . $where, $params);
 
@@ -336,10 +343,15 @@ final class MessageRepository
      * @param array<string, mixed> $filters
      * @return array{0: string, 1: array<string, mixed>}
      */
-    private function buildWhere(array $filters, bool $fulltext = false): array
+    private function buildWhere(array $filters, bool $fulltext = false, ?Scope $scope = null): array
     {
         $conditions = [];
         $params     = [];
+
+        if ($scope !== null && $scope->sql() !== '') {
+            $conditions[] = $scope->sql();
+            $params       = $scope->params();
+        }
 
         if (!empty($filters['status'])) {
             $conditions[]     = 'status = :status';
@@ -403,11 +415,20 @@ final class MessageRepository
      *
      * @return array<string, int>
      */
-    public function countByStatus(): array
+    public function countByStatus(?Scope $scope = null): array
     {
         $result = array_fill_keys(self::STATUSES, 0);
 
-        foreach ($this->db->select('SELECT status, COUNT(*) AS total FROM messages GROUP BY status') as $row) {
+        $condition = $scope === null ? '' : $scope->sql();
+        $params    = $scope === null ? [] : $scope->params();
+
+        $rows = $this->db->select(
+            'SELECT status, COUNT(*) AS total FROM messages'
+            . ($condition === '' ? '' : ' WHERE ' . $condition) . ' GROUP BY status',
+            $params
+        );
+
+        foreach ($rows as $row) {
             $result[(string) $row['status']] = (int) $row['total'];
         }
 
@@ -415,35 +436,44 @@ final class MessageRepository
     }
 
     /**
-     * Сводка для дашборда.
+     * Сводка для дашборда. С областью видимости считаются только письма владельца —
+     * обзор у каждого свой.
      *
      * @return array<string, mixed>
      */
-    public function stats(): array
+    public function stats(?Scope $scope = null): array
     {
         $today = date('Y-m-d');
 
+        $condition = $scope === null ? '' : $scope->sql();
+        $own       = $condition === '' ? '' : ' AND ' . $condition;
+        $params    = $scope === null ? [] : $scope->params();
+
         return [
-            'by_status'    => $this->countByStatus(),
-            'total'        => (int) $this->db->value('SELECT COUNT(*) FROM messages'),
+            'by_status'    => $this->countByStatus($scope),
+            'total'        => (int) $this->db->value(
+                'SELECT COUNT(*) FROM messages' . ($condition === '' ? '' : ' WHERE ' . $condition),
+                $params
+            ),
             'today_sent'   => (int) $this->db->value(
-                "SELECT COUNT(*) FROM messages WHERE status = 'sent' AND sent_at >= :from",
-                ['from' => $today . ' 00:00:00']
+                "SELECT COUNT(*) FROM messages WHERE status = 'sent' AND sent_at >= :from" . $own,
+                array_merge(['from' => $today . ' 00:00:00'], $params)
             ),
             'today_failed' => (int) $this->db->value(
-                "SELECT COUNT(*) FROM messages WHERE status = 'failed' AND updated_at >= :from",
-                ['from' => $today . ' 00:00:00']
+                "SELECT COUNT(*) FROM messages WHERE status = 'failed' AND updated_at >= :from" . $own,
+                array_merge(['from' => $today . ' 00:00:00'], $params)
             ),
             'queue_ready'  => (int) $this->db->value(
-                "SELECT COUNT(*) FROM messages WHERE status = 'queued' AND (available_at IS NULL OR available_at <= :now)",
-                ['now' => Database::now()]
+                "SELECT COUNT(*) FROM messages WHERE status = 'queued' AND (available_at IS NULL OR available_at <= :now)" . $own,
+                array_merge(['now' => Database::now()], $params)
             ),
             'queue_delayed' => (int) $this->db->value(
-                "SELECT COUNT(*) FROM messages WHERE status = 'queued' AND available_at > :now",
-                ['now' => Database::now()]
+                "SELECT COUNT(*) FROM messages WHERE status = 'queued' AND available_at > :now" . $own,
+                array_merge(['now' => Database::now()], $params)
             ),
             'oldest_queued' => $this->db->value(
-                "SELECT MIN(created_at) FROM messages WHERE status = 'queued'"
+                "SELECT MIN(created_at) FROM messages WHERE status = 'queued'" . $own,
+                $params
             ),
         ];
     }
@@ -453,17 +483,20 @@ final class MessageRepository
      *
      * @return array<int, array{date: string, sent: int, failed: int, total: int}>
      */
-    public function dailyStats(int $days = 14): array
+    public function dailyStats(int $days = 14, ?Scope $scope = null): array
     {
         $from = date('Y-m-d', strtotime('-' . max(1, $days - 1) . ' days'));
+
+        $condition = $scope === null ? '' : $scope->sql();
 
         $rows = $this->db->select(
             "SELECT substr(created_at, 1, 10) AS day,
                     COUNT(*) AS total,
                     SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS sent,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed
-             FROM messages WHERE created_at >= :from GROUP BY day ORDER BY day",
-            ['from' => $from . ' 00:00:00']
+             FROM messages WHERE created_at >= :from" . ($condition === '' ? '' : ' AND ' . $condition)
+             . ' GROUP BY day ORDER BY day',
+            array_merge(['from' => $from . ' 00:00:00'], $scope === null ? [] : $scope->params())
         );
 
         $byDay = [];

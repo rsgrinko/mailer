@@ -227,13 +227,18 @@ final class Router
 
         // Идём с конца, чтобы первая прослойка в списке оказалась внешней
         foreach (array_reverse($route->middleware) as $name) {
+            // Прослойке можно передать аргумент через двоеточие: can:projects.view
+            [$name, $argument] = array_pad(explode(':', $name, 2), 2, '');
+
             if (!isset($this->middleware[$name])) {
                 throw new MailerException('Прослойка «' . $name . '» не зарегистрирована');
             }
 
             $handler = $this->middleware[$name];
             $inner   = $next;
-            $next    = static fn (Request $request): Response => $handler($request, $inner);
+            $next    = static fn (Request $request): Response => $argument === ''
+                ? $handler($request, $inner)
+                : $handler($request, $inner, $argument);
         }
 
         return $next($request);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Mailer\Storage;
 
+use Mailer\Domain\Permission;
+
 /**
  * Миграции. Список запросов лежит прямо здесь: их немного, зато всё видно в одном месте.
  * Уже применённые миграции запоминаются в таблице migrations.
@@ -96,6 +98,68 @@ final class Migrator
             '0003_message_indexes' => $this->messageIndexes(),
             '0004_message_fulltext' => $this->messageFulltext(),
             '0005_message_sender' => $this->messageSender(),
+            '0006_access' => $this->accessSchema(),
+        ];
+    }
+
+    /**
+     * Роли и владельцы записей. До неё в панели все были равны и видели всё.
+     *
+     * Владелец — `owner_id`, ноль означает «ничьё»: так помечены записи, заведённые
+     * до разделения прав, и их видит только тот, у кого есть право data.all.
+     * Транспортам такие записи заодно ставим `shared = 1` — иначе после миграции
+     * обычный пользователь останется без единого способа отправки.
+     *
+     * У писем владелец свой, а не через проект: письмо из панели проекта может не иметь
+     * вовсе, а искать владельца подзапросом на каждом списке — лишняя работа для базы.
+     *
+     * @return array<int, string>
+     */
+    private function accessSchema(): array
+    {
+        $id   = $this->id();
+        $str  = fn (int $length = 191): string => $this->str($length);
+        $text = $this->text();
+        $int  = $this->int();
+        $dt   = $this->dt();
+        $end  = $this->tableSuffix();
+
+        $admin = json_encode(Permission::admin());
+        $user  = json_encode(Permission::user());
+        $now   = Database::now();
+
+        return [
+            "CREATE TABLE IF NOT EXISTS roles (
+                id {$id},
+                name {$str(191)} NOT NULL,
+                description {$text} NULL,
+                permissions {$text} NOT NULL,
+                is_system {$int} NOT NULL DEFAULT 0,
+                created_at {$dt} NOT NULL,
+                updated_at {$dt} NOT NULL
+            ){$end}",
+            $this->index('idx_roles_name', 'roles', 'name', true),
+
+            "INSERT INTO roles (name, description, permissions, is_system, created_at, updated_at)
+                VALUES ('Администратор', 'Полный доступ ко всем данным и настройкам сервиса', '{$admin}', 1, '{$now}', '{$now}')",
+            "INSERT INTO roles (name, description, permissions, is_system, created_at, updated_at)
+                VALUES ('Пользователь', 'Свои проекты, транспорты, шаблоны и письма', '{$user}', 0, '{$now}', '{$now}')",
+
+            "ALTER TABLE users ADD COLUMN role_id {$int} NULL",
+            "ALTER TABLE projects ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
+            "ALTER TABLE transports ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
+            "ALTER TABLE transports ADD COLUMN shared {$int} NOT NULL DEFAULT 0",
+            "ALTER TABLE templates ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
+            "ALTER TABLE messages ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
+
+            $this->index('idx_projects_owner', 'projects', 'owner_id'),
+            $this->index('idx_transports_owner', 'transports', 'owner_id'),
+            $this->index('idx_templates_owner', 'templates', 'owner_id'),
+            $this->index('idx_messages_owner', 'messages', 'owner_id, created_at'),
+
+            // Те, кто уже работал в панели, ничего не теряют
+            "UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'Администратор')",
+            'UPDATE transports SET shared = 1',
         ];
     }
 

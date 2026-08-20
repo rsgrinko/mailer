@@ -13,22 +13,25 @@ declare(strict_types=1);
  * @var bool $bare страница входа — без шапки и меню
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Ui\View;
 
 $user = $user ?? null;
 $bare = $bare ?? false;
 
+// Третьим идёт право: без него пункт не показываем — всё равно не пустит прослойка can
 $menu = [
-    'dashboard'  => ['Обзор', 'ui.dashboard'],
-    'messages'   => ['Письма', 'ui.messages'],
-    'compose'    => ['Написать', 'ui.compose'],
-    'transports' => ['Транспорты', 'ui.transports'],
-    'projects'   => ['Проекты', 'ui.projects'],
-    'templates'  => ['Шаблоны', 'ui.templates'],
-    'webhooks'   => ['Вебхуки', 'ui.webhooks'],
-    'users'      => ['Пользователи', 'ui.users'],
-    'logs'       => ['Логи', 'ui.logs'],
-    'system'     => ['Состояние', 'ui.system'],
+    'dashboard'  => ['Обзор', 'ui.dashboard', ''],
+    'messages'   => ['Письма', 'ui.messages', Permission::MESSAGES_VIEW],
+    'compose'    => ['Написать', 'ui.compose', Permission::MESSAGES_SEND],
+    'transports' => ['Транспорты', 'ui.transports', Permission::TRANSPORTS_VIEW],
+    'projects'   => ['Проекты', 'ui.projects', Permission::PROJECTS_VIEW],
+    'templates'  => ['Шаблоны', 'ui.templates', Permission::TEMPLATES_VIEW],
+    'webhooks'   => ['Вебхуки', 'ui.webhooks', Permission::WEBHOOKS_VIEW],
+    'users'      => ['Пользователи', 'ui.users', Permission::USERS_MANAGE],
+    'roles'      => ['Роли', 'ui.roles', Permission::ROLES_MANAGE],
+    'logs'       => ['Логи', 'ui.logs', Permission::LOGS_VIEW],
+    'system'     => ['Состояние', 'ui.system', Permission::SYSTEM_VIEW],
 ];
 ?>
 <!doctype html>
@@ -412,7 +415,7 @@ $menu = [
 
         <?php if ($user !== null) { ?>
             <span class="who">
-                <span class="muted small"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></span>
+                <a class="muted small" href="<?= View::e(View::route('ui.profile')) ?>"><?= View::e((string) ($user['name'] ?? $user['login'])) ?></a>
                 <form method="post" action="<?= View::e(View::route('ui.logout')) ?>">
                     <?= View::csrf() ?>
                     <button type="submit">Выйти</button>
@@ -423,8 +426,10 @@ $menu = [
         <label class="burger" for="menu-toggle" title="Меню" aria-label="Меню">☰</label>
     </div>
     <nav>
-        <?php foreach ($menu as $key => [$label, $route]) { ?>
-            <a href="<?= View::e(View::route($route)) ?>" class="<?= $active === $key ? 'active' : '' ?>"><?= View::e($label) ?></a>
+        <?php foreach ($menu as $key => [$label, $route, $permission]) { ?>
+            <?php if ($permission === '' || View::can($permission)) { ?>
+                <a href="<?= View::e(View::route($route)) ?>" class="<?= $active === $key ? 'active' : '' ?>"><?= View::e($label) ?></a>
+            <?php } ?>
         <?php } ?>
     </nav>
 </header>

@@ -40,7 +40,7 @@ final class Queue
     /**
      * Принимает письмо в очередь.
      *
-     * @param array<string, mixed> $options project, source, transport_id, template,
+     * @param array<string, mixed> $options project, owner_id, source, transport_id, template,
      *                                      template_data, idempotency_key, send_at, max_attempts
      * @return array{id: int, uuid: string, status: string, duplicate: bool}
      */
@@ -88,6 +88,7 @@ final class Queue
         $id = $this->messages->store($message, [
             'uuid'            => $uuid,
             'project_id'      => $projectId,
+            'owner_id'        => (int) ($options['owner_id'] ?? ($project['owner_id'] ?? 0)),
             'transport_id'    => $options['transport_id'] ?? null,
             'source'          => $options['source'] ?? MessageRepository::SOURCE_API,
             'status'          => MessageRepository::QUEUED,

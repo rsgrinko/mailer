@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Security\ApiKey;
 use Mailer\Storage\Database;
 use Mailer\Support\MailerException;
@@ -22,11 +23,16 @@ final class ProjectRepository
     }
 
     /**
+     * Область видимости: без неё видно всё (консоль, воркер, API — там своя проверка
+     * по ключу), с ней — только проекты владельца.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function all(): array
+    public function all(?Scope $scope = null): array
     {
-        return array_map([$this, 'hydrate'], $this->db->select('SELECT * FROM projects ORDER BY name'));
+        [$where, $params] = self::where($scope);
+
+        return array_map([$this, 'hydrate'], $this->db->select('SELECT * FROM projects' . $where . ' ORDER BY name', $params));
     }
 
     /**
@@ -34,22 +40,44 @@ final class ProjectRepository
      *
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    public function paginate(int $page = 1, int $perPage = 30): array
+    public function paginate(int $page = 1, int $perPage = 30, ?Scope $scope = null): array
     {
-        $result          = $this->db->page('SELECT * FROM projects ORDER BY name', [], $page, $perPage);
+        [$where, $params] = self::where($scope);
+
+        $result          = $this->db->page('SELECT * FROM projects' . $where . ' ORDER BY name', $params, $page, $perPage);
         $result['items'] = array_map([$this, 'hydrate'], $result['items']);
 
         return $result;
     }
 
     /**
+     * Чужой проект для обычного пользователя просто не существует: панель покажет
+     * «Проект не найден» вместо «нет доступа» — постороннему знать нечего.
+     *
      * @return array<string, mixed>|null
      */
-    public function find(int $id): ?array
+    public function find(int $id, ?Scope $scope = null): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM projects WHERE id = :id', ['id' => $id]);
+        [$where, $params] = self::where($scope, ' AND ');
+
+        $row = $this->db->selectOne(
+            'SELECT * FROM projects WHERE id = :id' . $where,
+            array_merge(['id' => $id], $params)
+        );
 
         return $row === null ? null : $this->hydrate($row);
+    }
+
+    /**
+     * Кусок WHERE от области видимости.
+     *
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private static function where(?Scope $scope, string $prefix = ' WHERE '): array
+    {
+        $sql = $scope === null ? '' : $scope->sql();
+
+        return [$sql === '' ? '' : $prefix . $sql, $scope === null ? [] : $scope->params()];
     }
 
     /**
@@ -118,6 +146,7 @@ final class ProjectRepository
             'webhook_url'        => $data['webhook_url'] ?? null,
             'webhook_secret'     => ($data['webhook_secret'] ?? '') !== '' ? (string) $data['webhook_secret'] : Str::random(32),
             'active'             => (int) (bool) ($data['active'] ?? true),
+            'owner_id'           => (int) ($data['owner_id'] ?? 0),
             'created_at'         => Database::now(),
             'updated_at'         => Database::now(),
         ]);
@@ -157,7 +186,20 @@ final class ProjectRepository
             $fields['active'] = (int) (bool) $data['active'];
         }
 
-        $this->db->update('projects', $fields, ['id' => $id]);
+        if (!array_key_exists('owner_id', $data)) {
+            $this->db->update('projects', $fields, ['id' => $id]);
+
+            return;
+        }
+
+        // Проект передали другому — его письма уезжают вместе с ним, иначе прежний
+        // владелец продолжит видеть их в своём списке, а новый не увидит вовсе
+        $fields['owner_id'] = (int) $data['owner_id'];
+
+        $this->db->transaction(function () use ($id, $fields): void {
+            $this->db->update('projects', $fields, ['id' => $id]);
+            $this->db->update('messages', ['owner_id' => $fields['owner_id']], ['project_id' => $id]);
+        });
     }
 
     /**
@@ -210,6 +252,7 @@ final class ProjectRepository
         $row['rate_limit_hour'] = (int) $row['rate_limit_hour'];
         $row['rate_limit_day']  = (int) $row['rate_limit_day'];
         $row['active']          = (int) $row['active'];
+        $row['owner_id']        = (int) ($row['owner_id'] ?? 0);
 
         return $row;
     }

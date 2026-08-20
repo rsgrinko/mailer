@@ -1,0 +1,585 @@
+openapi: 3.0.3
+
+info:
+  title: Mailer — сервис отправки e-mail
+  version: "1.0"
+  description: |
+    HTTP API сервиса отправки писем. Базовый адрес — `/api/v1`, запросы и ответы — JSON в UTF-8.
+
+    Письмо принимается в очередь и уходит через фоновый воркер; с флагом `sync` отправка
+    выполняется прямо в запросе. Текстовое описание с примерами — `docs/API.md`.
+
+servers:
+  - url: https://mail.example.com/api/v1
+    description: боевой сервер
+  - url: http://localhost:8000/api/v1
+    description: разработка (php -S)
+
+tags:
+  - name: messages
+    description: письма — приём, статус, список, повтор, отмена
+  - name: templates
+    description: шаблоны писем
+  - name: health
+    description: состояние сервиса
+
+security:
+  - bearerAuth: []
+
+paths:
+  /messages:
+    post:
+      tags: [messages]
+      summary: Поставить письмо в очередь
+      description: |
+        Принимает письмо от проекта. Тело — либо поля письма (`to`, `subject`, `text`/`html`/`template`),
+        либо готовый MIME в поле `raw`.
+
+        Ключ идемпотентности передаётся полем `idempotency_key` или заголовком `Idempotency-Key`:
+        повторный запрос с тем же ключом вернёт исходное письмо и `duplicate: true`.
+      operationId: createMessage
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: то же, что поле `idempotency_key` в теле; поле имеет приоритет
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/MessageInput'
+                - $ref: '#/components/schemas/RawMessageInput'
+            examples:
+              простое:
+                value:
+                  to: user@example.com
+                  subject: Заказ №1024 оформлен
+                  text: Спасибо за заказ!
+              с_шаблоном:
+                value:
+                  to: [{ email: user@example.com, name: Иван }]
+                  template: welcome
+                  template_data: { name: Иван, site: example.com }
+                  tag: registration
+              с_вложением:
+                value:
+                  to: user@example.com
+                  subject: Счёт
+                  html: <p>Счёт во вложении</p>
+                  attachments:
+                    - { name: счёт.pdf, content: JVBERi0xLjQK..., content_type: application/pdf }
+              готовый_mime:
+                value:
+                  raw: "MIME-Version: 1.0\r\nFrom: wiki@example.com\r\nTo: user@example.com\r\nSubject: Тема\r\n\r\nТекст"
+                  envelope_from: wiki@example.com
+                  envelope_to: [user@example.com]
+                  tag: dokuwiki
+      responses:
+        '202':
+          description: письмо принято в очередь
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptResult' }
+              example: { id: c744d95c-a13c-4931-b78d-006b64007490, status: queued, duplicate: false, sync: false, info: null }
+        '200':
+          description: 'письмо отправлено синхронно (`sync: true`) либо это повтор по известному `idempotency_key`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptResult' }
+              example: { id: c744d95c-a13c-4931-b78d-006b64007490, status: sent, duplicate: false, sync: true, info: "2.0.0 Ok: queued on ..." }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/ServerError' }
+        '502':
+          description: синхронная отправка не удалась — в теле статус письма и ответ транспорта
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptResult' }
+              example: { id: c744d95c-a13c-4931-b78d-006b64007490, status: failed, duplicate: false, sync: true, info: "SMTP 550 mailbox unavailable" }
+
+    get:
+      tags: [messages]
+      summary: Список писем проекта
+      description: Видны только письма своего проекта, порядок — от новых к старым.
+      operationId: listMessages
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MessageStatus' }
+        - name: tag
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          description: по теме, адресу и идентификатору письма
+          schema: { type: string }
+        - name: date_from
+          in: query
+          description: дата создания «с», формат `YYYY-MM-DD` или `YYYY-MM-DD HH:MM:SS`
+          schema: { type: string }
+        - name: date_to
+          in: query
+          description: дата создания «по»
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 30 }
+      responses:
+        '200':
+          description: страница списка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Message' }
+                  page:  { type: integer, example: 1 }
+                  pages: { type: integer, example: 4 }
+                  total: { type: integer, example: 97 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /messages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    get:
+      tags: [messages]
+      summary: Состояние письма
+      operationId: getMessage
+      responses:
+        '200':
+          description: письмо и история событий
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      tags: [messages]
+      summary: Отменить письмо в очереди
+      description: Работает, пока письмо не отправлено и не отменено.
+      operationId: cancelMessage
+      responses:
+        '200':
+          description: письмо отменено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionResult' }
+              example: { id: c744d95c-a13c-4931-b78d-006b64007490, status: canceled }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: письмо уже отправлено или отменено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /messages/{id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    post:
+      tags: [messages]
+      summary: Повторить отправку
+      description: Возвращает письмо в очередь и добавляет ему попыток. Отправленное письмо повторить нельзя.
+      operationId: retryMessage
+      responses:
+        '200':
+          description: письмо снова в очереди
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionResult' }
+              example: { id: c744d95c-a13c-4931-b78d-006b64007490, status: queued }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: письмо уже отправлено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /send:
+    post:
+      tags: [messages]
+      summary: Поставить письмо в очередь (короткий адрес)
+      description: Синоним `POST /messages` — тело, ответы и коды те же. Удобен для скриптов и `bin/mailer-send`.
+      operationId: send
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/MessageInput'
+                - $ref: '#/components/schemas/RawMessageInput'
+      responses:
+        '202':
+          description: письмо принято в очередь
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptResult' }
+        '200':
+          description: отправлено синхронно либо повтор по `idempotency_key`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /templates:
+    get:
+      tags: [templates]
+      summary: Список шаблонов
+      description: Отдаёт шаблоны сервиса вместе с перечнем переменных, которые в них встречаются.
+      operationId: listTemplates
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 30 }
+      responses:
+        '200':
+          description: страница списка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Template' }
+                  total: { type: integer, example: 3 }
+                  page:  { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /health:
+    get:
+      tags: [health]
+      summary: Состояние сервиса
+      description: Адрес для мониторинга, ключ не нужен. Проверяются база, очередь и живость воркера.
+      operationId: health
+      security: []
+      responses:
+        '200':
+          description: сервис работает (`ok`) или работает с оговорками (`degraded`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+              example:
+                status: ok
+                time: "2026-01-01T10:00:00+03:00"
+                checks:
+                  database: { ok: true }
+                  queue: { ok: true, ready: 0, delayed: 0, failed: 0 }
+                  worker: { ok: true, last_seen: "2026-01-01 10:00:00", seconds_ago: 3, processed: 128 }
+        '503':
+          description: сервис неисправен — недоступна база
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+              example:
+                status: error
+                time: "2026-01-01T10:00:00+03:00"
+                checks:
+                  database: { ok: false, error: Нет соединения с базой данных }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Ключ проекта: `Authorization: Bearer mlr_xxxxxxxx_...`.
+        Для совместимости принимается и заголовок `X-Api-Key` с тем же значением.
+        Ключ выдаёт `php bin/mailer key:create <проект>` или панель; в базе хранится только его хеш.
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+
+  parameters:
+    MessageId:
+      name: id
+      in: path
+      required: true
+      description: идентификатор письма из ответа на отправку (UUID)
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: ключ не передан или неверный
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { message: Неверный API-ключ, status: 401 } }
+    Forbidden:
+      description: проект отключён
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: письмо не найдено или принадлежит другому проекту
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Validation:
+      description: данные не прошли проверку — в `details.errors` перечислены все ошибки сразу
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              message: Данные запроса не прошли проверку
+              status: 422
+              details:
+                errors:
+                  - Не указан ни один получатель (поле to)
+                  - "Письмо пустое: нужно указать text, html или template"
+    RateLimited:
+      description: превышен лимит проекта (в час или в сутки)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: внутренняя ошибка; в `details.code` — код, по которому запись ищется в логах
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { message: Внутренняя ошибка сервиса, status: 500, details: { code: 9F3A1C } } }
+
+  schemas:
+    MessageStatus:
+      type: string
+      description: |
+        `queued` — ждёт отправки, `sending` — отправляется прямо сейчас, `sent` — отправлено,
+        `failed` — не удалось, `canceled` — отменено.
+      enum: [queued, sending, sent, failed, canceled]
+
+    Address:
+      description: адрес в любом виде — `user@example.com`, `Иван <ivan@example.com>` или объект
+      oneOf:
+        - type: string
+        - type: object
+          properties:
+            email: { type: string, format: email }
+            name:  { type: string }
+          required: [email]
+
+    AddressList:
+      description: один адрес, список адресов или строка с адресами через запятую
+      oneOf:
+        - $ref: '#/components/schemas/Address'
+        - type: array
+          items: { $ref: '#/components/schemas/Address' }
+
+    Attachment:
+      type: object
+      description: содержимое передаётся в base64 (`content`) либо путём к файлу на сервере (`path`)
+      properties:
+        name:         { type: string, description: имя файла в письме }
+        content:      { type: string, format: byte, description: содержимое в base64 }
+        path:         { type: string, description: путь к файлу на сервере сервиса }
+        content_type: { type: string, default: application/octet-stream, example: application/pdf }
+        inline:       { type: boolean, default: false, description: картинка внутри HTML }
+        cid:          { type: string, description: 'идентификатор для inline-картинки: <img src="cid:logo">' }
+      required: [name]
+
+    MessageInput:
+      type: object
+      description: письмо в полях. Нужны получатель, тема и хотя бы одно тело — `text`, `html` или `template`.
+      properties:
+        to:       { $ref: '#/components/schemas/AddressList' }
+        cc:       { $ref: '#/components/schemas/AddressList' }
+        bcc:      { $ref: '#/components/schemas/AddressList' }
+        from:
+          allOf: [{ $ref: '#/components/schemas/Address' }]
+          description: если не указан — берётся из проекта, а затем из настроек транспорта
+        reply_to: { $ref: '#/components/schemas/Address' }
+        subject:  { type: string, description: тема; можно опустить, если её даёт шаблон }
+        text:     { type: string, description: текстовая версия }
+        html:     { type: string, description: HTML-версия (текстовая создастся сама, если её нет) }
+        template: { type: string, description: имя шаблона сервиса }
+        template_data:
+          type: object
+          additionalProperties: true
+          description: переменные шаблона (синоним поля — `data`)
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: дополнительные заголовки письма
+        tag:  { type: string, description: метка для поиска и фильтров }
+        meta:
+          type: object
+          additionalProperties: true
+          description: произвольные данные, вернутся в вебхуке
+        transport: { type: string, description: имя конкретного транспорта; иначе берётся транспорт проекта }
+        priority:  { type: integer, default: 100, description: меньше — раньше отправится }
+        send_at:   { type: string, description: 'отложенная отправка: 2026-01-01 10:00:00' }
+        idempotency_key: { type: string, description: защита от дублей при повторных запросах }
+        sync:      { type: boolean, default: false, description: отправить сразу в запросе, а не через воркер }
+      required: [to]
+
+    RawMessageInput:
+      type: object
+      description: |
+        Готовый MIME целиком — так шлют sendmail-shim, SMTP-релей и движки со своим почтовым классом.
+        Сервис разбирает заголовки для панели, но отправляет байт в байт то, что прислали.
+        Вместе с `raw` работают `tag`, `meta`, `transport`, `priority` и `sync`;
+        шаблоны, `send_at` и `idempotency_key` — нет.
+      properties:
+        raw:           { type: string, description: письмо целиком, с заголовками и телом }
+        envelope_from: { type: string, format: email, description: отправитель по конверту; иначе берётся из `From` }
+        envelope_to:
+          description: получатели по конверту; иначе берутся из `To`, `Cc`, `Bcc`
+          oneOf:
+            - type: string
+            - type: array
+              items: { type: string, format: email }
+        tag: { type: string }
+        meta:
+          type: object
+          additionalProperties: true
+        transport: { type: string }
+        priority:  { type: integer, default: 100 }
+        sync:      { type: boolean, default: false }
+      required: [raw]
+
+    AcceptResult:
+      type: object
+      properties:
+        id:        { type: string, format: uuid, description: идентификатор письма }
+        status:    { $ref: '#/components/schemas/MessageStatus' }
+        duplicate: { type: boolean, description: письмо с таким `idempotency_key` уже принималось }
+        sync:      { type: boolean, description: письмо отправлялось прямо в запросе }
+        info:
+          type: string
+          nullable: true
+          description: ответ транспорта или текст ошибки при `sync`
+
+    ActionResult:
+      type: object
+      properties:
+        id:     { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/MessageStatus' }
+
+    Message:
+      type: object
+      properties:
+        id:      { type: string, format: uuid }
+        status:  { $ref: '#/components/schemas/MessageStatus' }
+        subject: { type: string }
+        to:
+          type: array
+          items: { type: string, format: email }
+        from:
+          type: string
+          nullable: true
+          description: отправитель, указанный клиентом
+        sender:
+          type: string
+          nullable: true
+          description: адрес, с которого письмо ушло на самом деле — расходится с `from`, когда транспорт подменяет отправителя
+        tag:        { type: string, nullable: true }
+        attempts:   { type: integer, description: сколько раз пытались отправить }
+        transport:  { type: string, nullable: true, description: имя транспорта, которым отправляли }
+        error:      { type: string, nullable: true, description: текст последней ошибки }
+        created_at: { type: string, example: "2026-01-01 10:00:00" }
+        sent_at:    { type: string, nullable: true, example: "2026-01-01 10:00:02" }
+
+    Event:
+      type: object
+      description: запись истории письма
+      properties:
+        type:
+          type: string
+          enum: [accepted, attempt, sent, failed, retry, canceled, requeued, webhook, sender]
+        message: { type: string }
+        at:      { type: string, example: "2026-01-01 10:00:02" }
+
+    Template:
+      type: object
+      properties:
+        name:        { type: string, example: welcome }
+        description: { type: string, nullable: true }
+        subject:     { type: string, example: "Здравствуйте, {{ name }}!" }
+        variables:
+          type: array
+          description: переменные, встречающиеся в теме и телах шаблона
+          items: { type: string }
+        updated_at:  { type: string, example: "2026-01-01 10:00:00" }
+
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+          description: '`degraded` — например, молчит воркер; `error` — недоступна база, код ответа 503'
+        time: { type: string, format: date-time }
+        checks:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                ok:    { type: boolean }
+                error: { type: string }
+            queue:
+              type: object
+              properties:
+                ok:      { type: boolean }
+                ready:   { type: integer, description: писем готово к отправке }
+                delayed: { type: integer, description: писем ждёт своего времени }
+                failed:  { type: integer, description: писем в статусе failed }
+            worker:
+              type: object
+              properties:
+                ok:          { type: boolean, description: воркер отмечался меньше 120 секунд назад }
+                last_seen:   { type: string, nullable: true }
+                seconds_ago: { type: integer }
+                processed:   { type: integer }
+                error:       { type: string }
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message: { type: string }
+            status:  { type: integer }
+            details:
+              type: object
+              additionalProperties: true
+      required: [error]

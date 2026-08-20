@@ -7,6 +7,7 @@ declare(strict_types=1);
  *
  * @var array<string, mixed>|null $user
  * @var array<string, mixed>|null $current
+ * @var array<int, array<string, mixed>> $roles
  */
 
 use Mailer\Security\Password;
@@ -39,6 +40,19 @@ $isSelf = !$isNew && $current !== null && (int) $current['id'] === (int) $user['
                 <span>Имя (необязательно)</span>
                 <input type="text" name="name" value="<?= View::e((string) ($user['name'] ?? '')) ?>">
             </label>
+
+            <label>
+                <span>Роль</span>
+                <select name="role_id">
+                    <option value="0">— без роли —</option>
+                    <?php foreach ($roles as $role) { ?>
+                        <option value="<?= (int) $role['id'] ?>" <?= (int) ($user['role_id'] ?? 0) === (int) $role['id'] ? 'selected' : '' ?>>
+                            <?= View::e((string) $role['name']) ?>
+                        </option>
+                    <?php } ?>
+                </select>
+            </label>
+            <p class="muted small">Роль решает, какие разделы человеку доступны. Без роли он увидит только обзор.</p>
 
             <label class="inline">
                 <input type="checkbox" name="active" <?= $isNew || (int) $user['active'] === 1 ? 'checked' : '' ?> <?= $isSelf ? 'disabled' : '' ?>>

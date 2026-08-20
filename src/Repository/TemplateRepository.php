@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Storage\Database;
 use Mailer\Support\MailerException;
 
@@ -22,9 +23,11 @@ final class TemplateRepository
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function all(): array
+    public function all(?Scope $scope = null): array
     {
-        return $this->db->select('SELECT * FROM templates ORDER BY name');
+        [$where, $params] = self::where($scope);
+
+        return $this->db->select('SELECT * FROM templates' . $where . ' ORDER BY name', $params);
     }
 
     /**
@@ -32,17 +35,36 @@ final class TemplateRepository
      *
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    public function paginate(int $page = 1, int $perPage = 30): array
+    public function paginate(int $page = 1, int $perPage = 30, ?Scope $scope = null): array
     {
-        return $this->db->page('SELECT * FROM templates ORDER BY name', [], $page, $perPage);
+        [$where, $params] = self::where($scope);
+
+        return $this->db->page('SELECT * FROM templates' . $where . ' ORDER BY name', $params, $page, $perPage);
     }
 
     /**
      * @return array<string, mixed>|null
      */
-    public function find(int $id): ?array
+    public function find(int $id, ?Scope $scope = null): ?array
     {
-        return $this->db->selectOne('SELECT * FROM templates WHERE id = :id', ['id' => $id]);
+        [$where, $params] = self::where($scope, ' AND ');
+
+        return $this->db->selectOne(
+            'SELECT * FROM templates WHERE id = :id' . $where,
+            array_merge(['id' => $id], $params)
+        );
+    }
+
+    /**
+     * Кусок WHERE от области видимости.
+     *
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private static function where(?Scope $scope, string $prefix = ' WHERE '): array
+    {
+        $sql = $scope === null ? '' : $scope->sql();
+
+        return [$sql === '' ? '' : $prefix . $sql, $scope === null ? [] : $scope->params()];
     }
 
     /**
@@ -72,6 +94,7 @@ final class TemplateRepository
             'subject'     => $data['subject'] ?? null,
             'html'        => $data['html'] ?? null,
             'text'        => $data['text'] ?? null,
+            'owner_id'    => (int) ($data['owner_id'] ?? 0),
             'created_at'  => Database::now(),
             'updated_at'  => Database::now(),
         ]);
@@ -88,6 +111,10 @@ final class TemplateRepository
             if (array_key_exists($key, $data)) {
                 $fields[$key] = $data[$key] === '' ? null : (string) $data[$key];
             }
+        }
+
+        if (array_key_exists('owner_id', $data)) {
+            $fields['owner_id'] = (int) $data['owner_id'];
         }
 
         $this->db->update('templates', $fields, ['id' => $id]);

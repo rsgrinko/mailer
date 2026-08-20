@@ -4,16 +4,24 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Permission;
 use Mailer\Security\Password;
 use Mailer\Storage\Database;
 use Mailer\Support\MailerException;
 
 /**
- * Пользователи панели. Права у всех одинаковые: вошёл — значит можешь всё,
- * поэтому в таблице только логин, пароль и признак активности.
+ * Пользователи панели. Права приходят из роли (таблица roles), своих галочек
+ * у пользователя нет: поменяли роль — поменялось у всех, кому она выдана.
  */
 final class UserRepository
 {
+    /**
+     * Пользователя всегда читаем вместе с ролью: без прав он бесполезен,
+     * а второй запрос за ними пришлось бы делать на каждой странице панели.
+     */
+    private const SELECT = 'SELECT u.*, r.name AS role_name, r.is_system AS role_is_system,'
+        . ' r.permissions AS role_permissions FROM users u LEFT JOIN roles r ON r.id = u.role_id';
+
     private Database $db;
 
     public function __construct(?Database $db = null)
@@ -26,7 +34,7 @@ final class UserRepository
      */
     public function all(): array
     {
-        return $this->db->select('SELECT * FROM users ORDER BY login');
+        return array_map([$this, 'hydrate'], $this->db->select(self::SELECT . ' ORDER BY u.login'));
     }
 
     /**
@@ -36,7 +44,10 @@ final class UserRepository
      */
     public function paginate(int $page = 1, int $perPage = 30): array
     {
-        return $this->db->page('SELECT * FROM users ORDER BY login', [], $page, $perPage);
+        $result          = $this->db->page(self::SELECT . ' ORDER BY u.login', [], $page, $perPage);
+        $result['items'] = array_map([$this, 'hydrate'], $result['items']);
+
+        return $result;
     }
 
     /**
@@ -44,7 +55,9 @@ final class UserRepository
      */
     public function find(int $id): ?array
     {
-        return $this->db->selectOne('SELECT * FROM users WHERE id = :id', ['id' => $id]);
+        $row = $this->db->selectOne(self::SELECT . ' WHERE u.id = :id', ['id' => $id]);
+
+        return $row === null ? null : $this->hydrate($row);
     }
 
     /**
@@ -52,10 +65,12 @@ final class UserRepository
      */
     public function findByLogin(string $login): ?array
     {
-        return $this->db->selectOne(
-            'SELECT * FROM users WHERE login = :login',
+        $row = $this->db->selectOne(
+            self::SELECT . ' WHERE u.login = :login',
             ['login' => self::normalizeLogin($login)]
         );
+
+        return $row === null ? null : $this->hydrate($row);
     }
 
     /**
@@ -75,7 +90,21 @@ final class UserRepository
     }
 
     /**
-     * @param array<string, mixed> $data login, password, name, active
+     * Сколько активных пользователей могут управлять пользователями. Последнего такого
+     * нельзя ни отключить, ни удалить, ни перевести на роль попроще — иначе в панель
+     * никто не сможет ни завести человека, ни выдать права.
+     */
+    public function countManagers(): int
+    {
+        return (int) $this->db->value(
+            'SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id'
+            . ' WHERE u.active = 1 AND r.permissions LIKE :permission',
+            ['permission' => '%"' . Permission::USERS_MANAGE . '"%']
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $data login, password, name, active, role_id
      * @return array<string, mixed> созданный пользователь
      */
     public function create(array $data): array
@@ -92,6 +121,7 @@ final class UserRepository
             'name'          => self::name($data),
             'password_hash' => Password::hash((string) ($data['password'] ?? '')),
             'active'        => (int) (bool) ($data['active'] ?? true),
+            'role_id'       => self::roleId($data),
             'created_at'    => Database::now(),
             'updated_at'    => Database::now(),
         ]);
@@ -132,14 +162,48 @@ final class UserRepository
         if (array_key_exists('active', $data)) {
             $active = (int) (bool) $data['active'];
 
-            if ($active === 0 && (int) $user['active'] === 1 && $this->countActive() <= 1) {
-                throw new MailerException('Это последний активный пользователь — отключить его нельзя');
+            if ($active === 0 && (int) $user['active'] === 1) {
+                if ($this->countActive() <= 1) {
+                    throw new MailerException('Это последний активный пользователь — отключить его нельзя');
+                }
+
+                $this->checkLastManager($user, 'отключить');
             }
 
             $fields['active'] = $active;
         }
 
+        if (array_key_exists('role_id', $data)) {
+            $roleId = self::roleId($data);
+
+            if ($roleId !== (int) ($user['role_id'] ?? 0) && (int) $user['active'] === 1) {
+                $this->checkLastManager($user, 'перевести на другую роль');
+            }
+
+            $fields['role_id'] = $roleId;
+        }
+
         $this->db->update('users', $fields, ['id' => $id]);
+    }
+
+    /**
+     * Не даёт остаться без единого человека, который управляет пользователями.
+     *
+     * @param array<string, mixed> $user
+     */
+    private function checkLastManager(array $user, string $action): void
+    {
+        if (!in_array(Permission::USERS_MANAGE, (array) ($user['permissions'] ?? []), true)) {
+            return;
+        }
+
+        if ($this->countManagers() > 1) {
+            return;
+        }
+
+        throw new MailerException(
+            'Это последний пользователь, который управляет пользователями, — ' . $action . ' его нельзя'
+        );
     }
 
     /**
@@ -180,6 +244,10 @@ final class UserRepository
 
         if ((int) $user['active'] === 1 && $this->countActive() <= 1) {
             throw new MailerException('Это последний активный пользователь — удалить его нельзя');
+        }
+
+        if ((int) $user['active'] === 1) {
+            $this->checkLastManager($user, 'удалить');
         }
 
         $this->db->delete('users', ['id' => $id]);
@@ -256,5 +324,32 @@ final class UserRepository
         $name = trim((string) ($data['name'] ?? ''));
 
         return $name === '' ? null : $name;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function roleId(array $data): ?int
+    {
+        $roleId = (int) ($data['role_id'] ?? 0);
+
+        return $roleId > 0 ? $roleId : null;
+    }
+
+    /**
+     * Права роли — рядом с пользователем. Роли нет (её удалили или пользователь
+     * заведён до разделения прав) — прав нет: в панель пустит, дальше не пустит.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function hydrate(array $row): array
+    {
+        $permissions = json_decode((string) ($row['role_permissions'] ?? '[]'), true);
+
+        $row['permissions'] = Permission::filter(is_array($permissions) ? $permissions : []);
+        unset($row['role_permissions']);
+
+        return $row;
     }
 }

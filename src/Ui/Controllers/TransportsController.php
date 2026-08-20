@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Permission;
+use Mailer\Domain\Scope;
+use Mailer\Domain\Viewer;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
 use Mailer\Transport\TransportFactory;
 use Mailer\Ui\View;
@@ -20,20 +24,24 @@ final class TransportsController extends ResourceController
 {
     private TransportRepository $transports;
     private RateLimiter $limiter;
+    private UserRepository $users;
 
     public function __construct(
         TransportRepository $transports,
-        RateLimiter $limiter
+        RateLimiter $limiter,
+        UserRepository $users
     ) {
         $this->transports = $transports;
         $this->limiter    = $limiter;
+        $this->users      = $users;
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         $result = $this->transports->paginate(
             (int) $request->query('page', 1),
-            (int) Config::get('ui.per_page', 30)
+            (int) Config::get('ui.per_page', 30),
+            $scope
         );
 
         $usage = [];
@@ -52,24 +60,48 @@ final class TransportsController extends ResourceController
     /**
      * Форма создания или правки.
      */
-    public function form(Request $request, ?int $id): Response
+    public function form(Request $request, ?int $id, Scope $scope, Viewer $viewer): Response
     {
-        $transport = $this->requireIfEditing($id, $id === null ? null : $this->transports->find($id));
+        $transport = $this->requireIfEditing($id, $id === null ? null : $this->transports->find($id, $scope));
 
         return Response::html(View::render('transport_form', [
             'active'    => 'transports',
             'transport' => $transport,
-            'all'       => $this->transports->all(),
+            'all'       => $this->transports->all(false, $scope),
+            'owners'    => $viewer->isAdmin() ? $this->users->all() : [],
+            // Общий транспорт и основной по умолчанию — дело администратора
+            'canShare'  => $viewer->isAdmin(),
+            // Чужой или общий транспорт показываем только на просмотр
+            'readOnly'  => $transport !== null && !$this->editable($transport, $viewer),
         ], $transport === null ? 'Новый транспорт' : 'Транспорт «' . $transport['name'] . '»'));
+    }
+
+    /**
+     * Правится ли транспорт этим пользователем. Общий транспорт видят все,
+     * но настройки и пароли в нём меняет только тот, кому доступны чужие данные.
+     *
+     * @param array<string, mixed> $transport
+     */
+    private function editable(array $transport, Viewer $viewer): bool
+    {
+        return $viewer->isAdmin() || (int) ($transport['owner_id'] ?? 0) === $viewer->id();
     }
 
     /**
      * Сохранение формы.
      */
-    public function save(Request $request): Response
+    public function save(Request $request, Scope $scope, Viewer $viewer): Response
     {
         $id   = (int) $request->input('id', 0);
         $type = (string) $request->input('type', 'smtp');
+
+        // Чужой транспорт для правки недоступен, общий — только администратору
+        $current = $id > 0 ? $this->require($this->transports->find($id, $scope)) : null;
+        if ($current !== null && !$this->editable($current, $viewer)) {
+            View::flash('Этот транспорт заведён администратором — менять его нельзя', 'error');
+
+            return Response::redirect(View::route('ui.transports.show', ['id' => $id]));
+        }
 
         $settings = match ($type) {
             'smtp' => [
@@ -108,8 +140,7 @@ final class TransportsController extends ResourceController
             ];
 
             // Пустой ключ в форме означает «оставить прежний»
-            if ($settings['dkim']['private_key'] === '' && $id > 0) {
-                $current = $this->transports->find($id);
+            if ($settings['dkim']['private_key'] === '' && $current !== null) {
                 $settings['dkim']['private_key'] = (string) ($current['settings']['dkim']['private_key'] ?? '');
             }
         }
@@ -123,8 +154,20 @@ final class TransportsController extends ResourceController
             'priority'    => (int) $request->input('priority', 100),
             'daily_limit' => (int) $request->input('daily_limit', 0),
             'active'      => $request->input('active') !== null,
-            'is_default'  => $request->input('is_default') !== null,
         ];
+
+        // Основной и общий транспорт — общесервисные настройки, их ставит администратор
+        if ($viewer->isAdmin()) {
+            $data['is_default'] = $request->input('is_default') !== null;
+            $data['shared']     = $request->input('shared') !== null;
+
+            $owner = (int) $request->input('owner_id', 0);
+            if ($owner > 0 || $id === 0) {
+                $data['owner_id'] = $owner;
+            }
+        } elseif ($id === 0) {
+            $data['owner_id'] = $viewer->id();
+        }
 
         try {
             if ($id > 0) {
@@ -146,9 +189,25 @@ final class TransportsController extends ResourceController
     /**
      * Кнопки в списке и в форме.
      */
-    public function action(Request $request, int $id, string $action): Response
+    public function action(Request $request, int $id, string $action, Scope $scope, Viewer $viewer): Response
     {
-        $transport = $this->require($this->transports->find($id));
+        $transport = $this->require($this->transports->find($id, $scope));
+
+        // На маршруте одно право на все кнопки, поэтому сверяем каждую отдельно
+        $required = $action === 'test' ? Permission::TRANSPORTS_TEST : Permission::TRANSPORTS_MANAGE;
+
+        if (!$viewer->can($required)) {
+            View::flash('Нет прав на это действие', 'error');
+
+            return Response::redirect(View::route('ui.transports'));
+        }
+
+        // Общий транспорт можно проверить, но не выключить и не удалить
+        if ($action !== 'test' && !$this->editable($transport, $viewer)) {
+            View::flash('Этот транспорт заведён администратором — менять его нельзя', 'error');
+
+            return Response::redirect(View::route('ui.transports'));
+        }
 
         switch ($action) {
             case 'test':

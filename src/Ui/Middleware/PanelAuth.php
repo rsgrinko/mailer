@@ -26,13 +26,13 @@ final class PanelAuth
     public function __invoke(Request $request, callable $next): Response
     {
         if (!Auth::enabled()) {
-            return $next($request);
+            return $next($this->withViewer($request));
         }
 
         Auth::start();
 
         if (Auth::check()) {
-            return $next($request);
+            return $next($this->withViewer($request));
         }
 
         if ($this->users()->count() === 0) {
@@ -46,6 +46,19 @@ final class PanelAuth
 
         return Response::redirect(View::route('ui.login', $next !== '' ? ['next' => $next] : []));
     }
+    /**
+     * Кладёт в запрос того, кто смотрит, и его область видимости. Дальше роутер
+     * подставит их в контроллеры по именам аргументов — Viewer $viewer, Scope $scope.
+     */
+    private function withViewer(Request $request): Request
+    {
+        $viewer = Auth::viewer();
+
+        return $request
+            ->setAttribute('viewer', $viewer)
+            ->setAttribute('scope', $viewer->scope());
+    }
+
     /**
      * Репозиторий берём при первом обращении: собирать маршруты можно и с лежащей базой.
      */

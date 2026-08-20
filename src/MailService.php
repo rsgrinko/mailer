@@ -41,10 +41,16 @@ final class MailService
      * @param array<string, mixed> $payload данные письма
      * @param array<string, mixed>|null $project проект-отправитель (для API-ключа)
      * @param string $source откуда пришло письмо: api, sendmail, smtpd, cli, ui
+     * @param int $ownerId кому принадлежит письмо, если оно не от проекта: панель
+     *                     ставит того, кто нажал «отправить», иначе владельца берут у проекта
      * @return array<string, mixed> сведения о принятом письме
      */
-    public function accept(array $payload, ?array $project = null, string $source = MessageRepository::SOURCE_API): array
-    {
+    public function accept(
+        array $payload,
+        ?array $project = null,
+        string $source = MessageRepository::SOURCE_API,
+        int $ownerId = 0
+    ): array {
         $built   = $this->factory->build($payload, $project);
         $message = $built['message'];
         $options = $built['options'];
@@ -61,6 +67,7 @@ final class MailService
 
         $result = $this->queue->push($message, [
             'project'         => $project,
+            'owner_id'        => $ownerId > 0 ? $ownerId : (int) ($project['owner_id'] ?? 0),
             'source'          => $source,
             'transport_id'    => $transportId,
             'template'        => $options['template'] ?? null,

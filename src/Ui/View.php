@@ -235,6 +235,25 @@ final class View
     }
 
     /**
+     * Есть ли у вошедшего право. Нужно вьюхам: пункт меню и кнопку без права
+     * не показываем — доступ всё равно закроет прослойка can.
+     */
+    public static function can(string $permission): bool
+    {
+        return Auth::viewer()->can($permission);
+    }
+
+    /**
+     * Хватит любого права из списка.
+     *
+     * @param array<int, string> $permissions
+     */
+    public static function canAny(array $permissions): bool
+    {
+        return Auth::viewer()->canAny($permissions);
+    }
+
+    /**
      * Адрес маршрута по его имени: View::route('ui.messages.show', ['id' => 5]).
      * Лишние параметры уходят в query-строку — так удобно тащить фильтры по страницам.
      *

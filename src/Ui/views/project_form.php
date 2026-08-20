@@ -7,6 +7,7 @@ declare(strict_types=1);
  *
  * @var array<string, mixed>|null $project
  * @var array<int, array<string, mixed>> $transports
+ * @var array<int, array<string, mixed>> $owners пользователи для выбора владельца (только администратору)
  * @var array{hour: int, day: int} $usage
  * @var array<int, array<string, mixed>> $recent
  */
@@ -68,6 +69,21 @@ $isNew = $project === null;
                 <input type="checkbox" name="active" <?= $isNew || (int) $project['active'] === 1 ? 'checked' : '' ?>>
                 <span>Проект активен</span>
             </label>
+
+            <?php if ($owners !== []) { ?>
+                <label>
+                    <span>Владелец</span>
+                    <select name="owner_id">
+                        <option value="0">— ничей, виден только администраторам —</option>
+                        <?php foreach ($owners as $owner) { ?>
+                            <option value="<?= (int) $owner['id'] ?>" <?= (int) ($project['owner_id'] ?? 0) === (int) $owner['id'] ? 'selected' : '' ?>>
+                                <?= View::e((string) $owner['login']) ?>
+                            </option>
+                        <?php } ?>
+                    </select>
+                </label>
+                <p class="muted small">Письма проекта уедут к новому владельцу вместе с ним.</p>
+            <?php } ?>
         </div>
 
         <div class="card">

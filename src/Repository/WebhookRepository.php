@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Storage\Database;
 
 /**
@@ -90,10 +91,9 @@ final class WebhookRepository
      * @param array<string, mixed> $filters
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    public function paginate(array $filters = [], int $page = 1, int $perPage = 30): array
+    public function paginate(array $filters = [], int $page = 1, int $perPage = 30, ?Scope $scope = null): array
     {
-        $conditions = [];
-        $params     = [];
+        [$conditions, $params] = self::scoped($scope);
 
         if (!empty($filters['status'])) {
             $conditions[]     = 'status = :status';
@@ -126,9 +126,33 @@ final class WebhookRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(int $id): ?array
+    public function find(int $id, ?Scope $scope = null): ?array
     {
-        return $this->db->selectOne('SELECT * FROM webhook_deliveries WHERE id = :id', ['id' => $id]);
+        [$conditions, $params] = self::scoped($scope);
+
+        $where = $conditions === [] ? '' : ' AND ' . implode(' AND ', $conditions);
+
+        return $this->db->selectOne(
+            'SELECT * FROM webhook_deliveries WHERE id = :id' . $where,
+            array_merge(['id' => $id], $params)
+        );
+    }
+
+    /**
+     * Своя ли это доставка, решает проект: вебхуки принадлежат тому, чей проект.
+     *
+     * @return array{0: array<int, string>, 1: array<string, int>}
+     */
+    private static function scoped(?Scope $scope): array
+    {
+        if ($scope === null || $scope->isAll()) {
+            return [[], []];
+        }
+
+        return [
+            ['project_id IN (SELECT id FROM projects WHERE ' . $scope->sql() . ')'],
+            $scope->params(),
+        ];
     }
 
     /**
@@ -151,11 +175,15 @@ final class WebhookRepository
     /**
      * @return array<string, int>
      */
-    public function countByStatus(): array
+    public function countByStatus(?Scope $scope = null): array
     {
         $result = [self::QUEUED => 0, self::DELIVERED => 0, self::FAILED => 0];
 
-        foreach ($this->db->select('SELECT status, COUNT(*) AS total FROM webhook_deliveries GROUP BY status') as $row) {
+        [$conditions, $params] = self::scoped($scope);
+
+        $where = $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions);
+
+        foreach ($this->db->select('SELECT status, COUNT(*) AS total FROM webhook_deliveries' . $where . ' GROUP BY status', $params) as $row) {
             $result[(string) $row['status']] = (int) $row['total'];
         }
 

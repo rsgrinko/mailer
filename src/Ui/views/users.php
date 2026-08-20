@@ -20,13 +20,15 @@ use Mailer\Ui\View;
 
 <div class="card" style="margin-top:16px">
     <p class="muted small" style="margin-top:0">
-        Права у всех одинаковые: вошедший в панель может всё, включая управление пользователями.
+        Что человеку доступно, решает его <a href="<?= View::e(View::route('ui.roles')) ?>">роль</a>.
+        Пользователь без роли войдёт в панель, но дальше обзора не пройдёт.
     </p>
 
     <div class="table-wrap">
         <table class="list">
             <tr class="head">
                 <th>Логин</th>
+                <th>Роль</th>
                 <th class="hide-sm">Имя</th>
                 <th class="hide-sm">Последний вход</th>
                 <th>Состояние</th>
@@ -40,6 +42,13 @@ use Mailer\Ui\View;
                         <a href="<?= View::e(View::route('ui.users.show', ['id' => $item['id']])) ?>"><?= View::e((string) $item['login']) ?></a>
                         <?php if ($isSelf) { ?>
                             <span class="muted small">— это вы</span>
+                        <?php } ?>
+                    </td>
+                    <td class="small">
+                        <?php if (($item['role_name'] ?? null) !== null) { ?>
+                            <?= View::e((string) $item['role_name']) ?>
+                        <?php } else { ?>
+                            <span class="badge muted">без роли</span>
                         <?php } ?>
                     </td>
                     <td class="small hide-sm"><?= View::e((string) ($item['name'] ?? '—')) ?></td>

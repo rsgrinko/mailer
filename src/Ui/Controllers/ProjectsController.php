@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Scope;
+use Mailer\Domain\Viewer;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
 use Mailer\Ui\View;
 use Throwable;
@@ -23,24 +26,28 @@ final class ProjectsController extends ResourceController
     private TransportRepository $transports;
     private MessageRepository $messages;
     private RateLimiter $limiter;
+    private UserRepository $users;
 
     public function __construct(
         ProjectRepository $projects,
         TransportRepository $transports,
         MessageRepository $messages,
-        RateLimiter $limiter
+        RateLimiter $limiter,
+        UserRepository $users
     ) {
         $this->projects   = $projects;
         $this->transports = $transports;
         $this->messages   = $messages;
         $this->limiter    = $limiter;
+        $this->users      = $users;
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         $result = $this->projects->paginate(
             (int) $request->query('page', 1),
-            (int) Config::get('ui.per_page', 30)
+            (int) Config::get('ui.per_page', 30),
+            $scope
         );
 
         $usage = [];
@@ -56,25 +63,27 @@ final class ProjectsController extends ResourceController
         ], 'Проекты'));
     }
 
-    public function form(Request $request, ?int $id): Response
+    public function form(Request $request, ?int $id, Scope $scope, Viewer $viewer): Response
     {
-        $project = $this->requireIfEditing($id, $id === null ? null : $this->projects->find($id));
+        $project = $this->requireIfEditing($id, $id === null ? null : $this->projects->find($id, $scope));
 
         $recent = [];
         if ($project !== null) {
-            $recent = $this->messages->paginate(['project_id' => $id], 1, 10)['items'];
+            $recent = $this->messages->paginate(['project_id' => $id], 1, 10, $scope)['items'];
         }
 
         return Response::html(View::render('project_form', [
             'active'     => 'projects',
             'project'    => $project,
-            'transports' => $this->transports->all(),
+            'transports' => $this->transports->all(false, $scope),
             'usage'      => $project !== null ? $this->limiter->projectUsage((int) $project['id']) : ['hour' => 0, 'day' => 0],
             'recent'     => $recent,
+            // Владельца выбирают только те, кто видит чужие данные: остальным он и так свой
+            'owners'     => $viewer->isAdmin() ? $this->users->all() : [],
         ], $project === null ? 'Новый проект' : 'Проект «' . $project['name'] . '»'));
     }
 
-    public function save(Request $request): Response
+    public function save(Request $request, Scope $scope, Viewer $viewer): Response
     {
         $id = (int) $request->input('id', 0);
 
@@ -93,6 +102,21 @@ final class ProjectsController extends ResourceController
         $secret = trim((string) $request->input('webhook_secret', ''));
         if ($secret !== '') {
             $data['webhook_secret'] = $secret;
+        }
+
+        // Владельца назначает только тот, кто видит чужие данные, остальные заводят на себя
+        if ($viewer->isAdmin()) {
+            $owner = (int) $request->input('owner_id', 0);
+            if ($owner > 0 || $id === 0) {
+                $data['owner_id'] = $owner;
+            }
+        } elseif ($id === 0) {
+            $data['owner_id'] = $viewer->id();
+        }
+
+        // Чужой проект правится ровно так же, как несуществующий, — никак
+        if ($id > 0) {
+            $this->require($this->projects->find($id, $scope));
         }
 
         try {
@@ -114,9 +138,9 @@ final class ProjectsController extends ResourceController
         return Response::redirect(View::route('ui.projects.show', ['id' => $id]));
     }
 
-    public function action(Request $request, int $id, string $action): Response
+    public function action(Request $request, int $id, string $action, Scope $scope): Response
     {
-        $project = $this->require($this->projects->find($id));
+        $project = $this->require($this->projects->find($id, $scope));
 
         switch ($action) {
             case 'key':

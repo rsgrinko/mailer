@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Scope;
+use Mailer\Domain\Viewer;
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\TemplateRepository;
@@ -28,11 +30,12 @@ final class TemplatesController extends ResourceController
         $this->renderer  = $renderer;
     }
 
-    public function index(Request $request): Response
+    public function index(Request $request, Scope $scope): Response
     {
         $result = $this->templates->paginate(
             (int) $request->query('page', 1),
-            (int) Config::get('ui.per_page', 30)
+            (int) Config::get('ui.per_page', 30),
+            $scope
         );
 
         $items = $result['items'];
@@ -52,9 +55,9 @@ final class TemplatesController extends ResourceController
         ], 'Шаблоны'));
     }
 
-    public function form(Request $request, ?int $id): Response
+    public function form(Request $request, ?int $id, Scope $scope): Response
     {
-        $template = $this->requireIfEditing($id, $id === null ? null : $this->templates->find($id));
+        $template = $this->requireIfEditing($id, $id === null ? null : $this->templates->find($id, $scope));
 
         $variables = $template === null ? [] : $this->renderer->variables(
             (string) ($template['subject'] ?? ''),
@@ -79,9 +82,14 @@ final class TemplatesController extends ResourceController
         ], $template === null ? 'Новый шаблон' : 'Шаблон «' . $template['name'] . '»'));
     }
 
-    public function save(Request $request): Response
+    public function save(Request $request, Scope $scope, Viewer $viewer): Response
     {
         $id = (int) $request->input('id', 0);
+
+        // Чужой шаблон не правится: для пользователя его просто нет
+        if ($id > 0) {
+            $this->require($this->templates->find($id, $scope));
+        }
 
         $data = [
             'name'        => trim((string) $request->input('name', '')),
@@ -90,6 +98,10 @@ final class TemplatesController extends ResourceController
             'html'        => (string) $request->input('html', ''),
             'text'        => (string) $request->input('text', ''),
         ];
+
+        if ($id === 0) {
+            $data['owner_id'] = $viewer->id();
+        }
 
         try {
             if ($id > 0) {
@@ -108,9 +120,9 @@ final class TemplatesController extends ResourceController
         return Response::redirect(View::route('ui.templates.show', ['id' => $id]));
     }
 
-    public function action(Request $request, int $id, string $action): Response
+    public function action(Request $request, int $id, string $action, Scope $scope): Response
     {
-        $template = $this->require($this->templates->find($id));
+        $template = $this->require($this->templates->find($id, $scope));
 
         if ($action === 'delete') {
             $this->templates->delete($id);

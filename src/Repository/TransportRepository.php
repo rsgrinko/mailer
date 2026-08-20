@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Repository;
 
+use Mailer\Domain\Scope;
 use Mailer\Security\Crypto;
 use Mailer\Storage\Database;
 use Mailer\Support\MailerException;
@@ -24,17 +25,27 @@ final class TransportRepository
     }
 
     /**
+     * Со своей областью видимости пользователь видит свои транспорты и общие
+     * (`shared = 1`) — те заводит администратор, чтобы не поднимать каждому свой SMTP.
+     * Общие видно, но правит их только тот, у кого есть доступ к чужим данным.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function all(bool $onlyActive = false): array
+    public function all(bool $onlyActive = false, ?Scope $scope = null): array
     {
-        $sql = 'SELECT * FROM transports';
-        if ($onlyActive) {
-            $sql .= ' WHERE active = 1';
-        }
-        $sql .= ' ORDER BY priority, id';
+        $conditions = $onlyActive ? ['active = 1'] : [];
+        [$sql, $params] = self::scoped($scope);
 
-        return array_map([$this, 'hydrate'], $this->db->select($sql));
+        if ($sql !== '') {
+            $conditions[] = $sql;
+        }
+
+        $where = $conditions === [] ? '' : ' WHERE ' . implode(' AND ', $conditions);
+
+        return array_map([$this, 'hydrate'], $this->db->select(
+            'SELECT * FROM transports' . $where . ' ORDER BY priority, id',
+            $params
+        ));
     }
 
     /**
@@ -42,9 +53,12 @@ final class TransportRepository
      *
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
      */
-    public function paginate(int $page = 1, int $perPage = 30): array
+    public function paginate(int $page = 1, int $perPage = 30, ?Scope $scope = null): array
     {
-        $result          = $this->db->page('SELECT * FROM transports ORDER BY priority, id', [], $page, $perPage);
+        [$sql, $params] = self::scoped($scope);
+        $where          = $sql === '' ? '' : ' WHERE ' . $sql;
+
+        $result          = $this->db->page('SELECT * FROM transports' . $where . ' ORDER BY priority, id', $params, $page, $perPage);
         $result['items'] = array_map([$this, 'hydrate'], $result['items']);
 
         return $result;
@@ -53,11 +67,30 @@ final class TransportRepository
     /**
      * @return array<string, mixed>|null
      */
-    public function find(int $id): ?array
+    public function find(int $id, ?Scope $scope = null): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM transports WHERE id = :id', ['id' => $id]);
+        [$sql, $params] = self::scoped($scope);
+
+        $row = $this->db->selectOne(
+            'SELECT * FROM transports WHERE id = :id' . ($sql === '' ? '' : ' AND ' . $sql),
+            array_merge(['id' => $id], $params)
+        );
 
         return $row === null ? null : $this->hydrate($row);
+    }
+
+    /**
+     * Условие области видимости: свои транспорты плюс общие.
+     *
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private static function scoped(?Scope $scope): array
+    {
+        if ($scope === null) {
+            return ['', []];
+        }
+
+        return [$scope->sql('owner_id', 'shared'), $scope->params()];
     }
 
     /**
@@ -116,6 +149,8 @@ final class TransportRepository
             'daily_limit' => (int) ($data['daily_limit'] ?? 0),
             'is_default'  => (int) (bool) ($data['is_default'] ?? false),
             'active'      => (int) (bool) ($data['active'] ?? true),
+            'owner_id'    => (int) ($data['owner_id'] ?? 0),
+            'shared'      => (int) (bool) ($data['shared'] ?? false),
             'created_at'  => Database::now(),
             'updated_at'  => Database::now(),
         ]);
@@ -160,7 +195,11 @@ final class TransportRepository
             }
         }
 
-        foreach (['active', 'is_default'] as $key) {
+        if (array_key_exists('owner_id', $data)) {
+            $fields['owner_id'] = (int) $data['owner_id'];
+        }
+
+        foreach (['active', 'is_default', 'shared'] as $key) {
             if (array_key_exists($key, $data)) {
                 $fields[$key] = (int) (bool) $data[$key];
             }
@@ -254,6 +293,8 @@ final class TransportRepository
         $row['active']     = (int) $row['active'];
         $row['is_default'] = (int) $row['is_default'];
         $row['daily_limit'] = (int) $row['daily_limit'];
+        $row['owner_id']   = (int) ($row['owner_id'] ?? 0);
+        $row['shared']     = (int) ($row['shared'] ?? 0);
 
         return $row;
     }
