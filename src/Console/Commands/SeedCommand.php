@@ -50,6 +50,8 @@ final class SeedCommand extends Command
                 $transports->create([
                     'name'       => $name,
                     'type'       => 'smtp',
+                    // Базовые транспорты общие: ими пользуются все, правит администратор
+                    'shared'     => true,
                     'from_email' => Env::string('SEED_SMTP_FROM_EMAIL', $user),
                     'from_name'  => Env::string('SEED_SMTP_FROM_NAME', 'Mailer'),
                     'is_default' => true,
@@ -76,6 +78,7 @@ final class SeedCommand extends Command
             $transports->create([
                 'name'     => 'log',
                 'type'     => 'log',
+                'shared'   => true,
                 'priority' => 900,
                 'settings' => ['dir' => Config::get('paths.spool') . '/sent'],
             ]);

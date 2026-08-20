@@ -6,6 +6,7 @@ namespace Mailer\Console\Commands;
 
 use Mailer\Console\Command;
 use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
 
 /**
@@ -25,7 +26,7 @@ final class TransportAddCommand extends Command
 
     public function usage(): string
     {
-        return 'transport:add <имя> --type=smtp --host= --port= --encryption= --user= --password= [--from=] [--from-name=] [--force-from] [--default]';
+        return 'transport:add <имя> --type=smtp --host= --port= --encryption= --user= --password= [--from=] [--from-name=] [--force-from] [--default] [--owner=логин] [--shared]';
     }
 
     public function run(): int
@@ -70,8 +71,22 @@ final class TransportAddCommand extends Command
             $settings['force_from'] = true;
         }
 
+        // Без владельца транспорт общесервисный: с --shared его увидят все пользователи
+        $ownerId = 0;
+        if (isset($this->options['owner'])) {
+            $owner = (new UserRepository())->findByLogin((string) $this->options['owner']);
+            if ($owner === null) {
+                $this->line('Пользователь «' . $this->options['owner'] . '» не найден');
+
+                return 1;
+            }
+            $ownerId = (int) $owner['id'];
+        }
+
         $id = (new TransportRepository())->create([
             'name'        => $name,
+            'owner_id'    => $ownerId,
+            'shared'      => isset($this->options['shared']),
             'type'        => $type,
             'settings'    => $settings,
             'from_email'  => $this->options['from'] ?? null,

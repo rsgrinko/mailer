@@ -7,6 +7,7 @@ namespace Mailer\Console\Commands;
 use Mailer\Console\Command;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
+use Mailer\Repository\UserRepository;
 
 /**
  * создать проект и выдать ключ.
@@ -25,7 +26,7 @@ final class KeyCreateCommand extends Command
 
     public function usage(): string
     {
-        return 'key:create <имя> [--transport=] [--limit-day=] [--webhook=]';
+        return 'key:create <имя> [--transport=] [--owner=логин] [--limit-day=] [--webhook=]';
     }
 
     public function run(): int
@@ -49,8 +50,22 @@ final class KeyCreateCommand extends Command
             $transportId = (int) $transport['id'];
         }
 
+        // Без владельца проект остаётся ничьим: в панели его увидят только те,
+        // у кого есть доступ к чужим данным
+        $ownerId = 0;
+        if (isset($this->options['owner'])) {
+            $owner = (new UserRepository())->findByLogin((string) $this->options['owner']);
+            if ($owner === null) {
+                $this->line('Пользователь «' . $this->options['owner'] . '» не найден');
+
+                return 1;
+            }
+            $ownerId = (int) $owner['id'];
+        }
+
         $created = (new ProjectRepository())->create([
             'name'            => $name,
+            'owner_id'        => $ownerId,
             'description'     => $this->options['description'] ?? null,
             'transport_id'    => $transportId,
             'rate_limit_hour' => (int) ($this->options['limit-hour'] ?? 0),

@@ -50,6 +50,7 @@ final class Application
             Commands\UserListCommand::class,
             Commands\UserPasswordCommand::class,
             Commands\UserDeleteCommand::class,
+            Commands\RoleListCommand::class,
         ],
         'Транспорты и шаблоны' => [
             Commands\TransportAddCommand::class,

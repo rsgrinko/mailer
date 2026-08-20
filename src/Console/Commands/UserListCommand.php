@@ -38,10 +38,11 @@ final class UserListCommand extends Command
             return 0;
         }
 
-        $this->line($this->pad('Логин', 24) . $this->pad('Состояние', 12) . 'Последний вход');
+        $this->line($this->pad('Логин', 24) . $this->pad('Роль', 20) . $this->pad('Состояние', 12) . 'Последний вход');
         foreach ($users as $user) {
             $this->line(
                 $this->pad((string) $user['login'], 24)
+                . $this->pad((string) ($user['role_name'] ?? 'без роли'), 20)
                 . $this->pad((int) $user['active'] === 1 ? 'активен' : 'отключён', 12)
                 . (string) ($user['last_login_at'] ?? 'не входил')
             );
