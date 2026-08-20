@@ -178,6 +178,8 @@ final class MessagesController
             'subject'    => $row['subject'],
             'to'         => array_column($this->messages->decodeArray($row['to_json'] ?? null), 'email'),
             'from'       => $row['from_email'] ?? null,
+            // Транспорт мог отправить письмо со своего адреса — тогда он здесь
+            'sender'     => $row['sender_used'] ?? null,
             'tag'        => $row['tag'] ?? null,
             'attempts'   => (int) ($row['attempts'] ?? 0),
             'transport'  => $row['transport_used'] ?? null,

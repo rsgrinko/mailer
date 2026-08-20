@@ -131,6 +131,7 @@ GET /api/v1/messages/{id}
     "subject": "Заказ №1024 оформлен",
     "to": ["user@example.com"],
     "from": "noreply@example.com",
+    "sender": "noreply@example.com",
     "tag": null,
     "attempts": 1,
     "transport": "yandex",

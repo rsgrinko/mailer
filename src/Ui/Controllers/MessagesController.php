@@ -131,7 +131,7 @@ final class MessagesController
             'templateData' => $this->messages->decodeArray($row['template_data'] ?? null),
             'attachments' => $this->messages->decodeArray($row['attachments_json'] ?? null),
             'events'      => $events,
-            'senderUsed'  => $this->senderUsed($events),
+            'senderUsed'  => $this->senderUsed($row, $events),
             'project'     => $row['project_id'] !== null ? $this->projects->find((int) $row['project_id']) : null,
             'transport'   => $row['transport_id'] !== null ? $this->transports->find((int) $row['transport_id']) : null,
             'webhooks'    => $this->webhooks->paginate(['message_id' => $id], 1, 20)['items'],
@@ -144,27 +144,36 @@ final class MessagesController
      * С какого адреса письмо ушло на самом деле: транспорт с force_from подменяет
      * отправителя на отправке, и в карточке иначе не понять, почему адрес не тот.
      *
+     * @param array<string, mixed> $row
      * @param array<int, array<string, mixed>> $events
      * @return array{was: string, now: string}|null
      */
-    private function senderUsed(array $events): ?array
+    private function senderUsed(array $row, array $events): ?array
     {
-        $replaced = null;
+        $was = trim((string) ($row['from_email'] ?? ''));
+        $now = trim((string) ($row['sender_used'] ?? ''));
 
-        foreach ($events as $event) {
-            if ((string) $event['type'] !== EventRepository::SENDER) {
-                continue;
-            }
+        // Письма, отправленные до появления колонки, знают о подмене только по истории
+        if ($now === '') {
+            foreach ($events as $event) {
+                if ((string) $event['type'] !== EventRepository::SENDER) {
+                    continue;
+                }
 
-            $meta = (array) ($event['meta'] ?? []);
-            $now  = trim((string) ($meta['now'] ?? ''));
+                $meta = (array) ($event['meta'] ?? []);
+                $now  = trim((string) ($meta['now'] ?? ''));
 
-            if ($now !== '') {
-                $replaced = ['was' => trim((string) ($meta['was'] ?? '')), 'now' => $now];
+                if ($was === '') {
+                    $was = trim((string) ($meta['was'] ?? ''));
+                }
             }
         }
 
-        return $replaced;
+        if ($now === '' || $was === '' || strcasecmp($was, $now) === 0) {
+            return null;
+        }
+
+        return ['was' => $was, 'now' => $now];
     }
 
     /**

@@ -215,7 +215,8 @@ final class MessageRepository
 
         $items = $this->db->select(
             'SELECT id, uuid, project_id, transport_id, transport_used, status, source, subject, from_email,
-                    to_json, tag, attempts, max_attempts, size, available_at, last_error, sent_at, created_at, updated_at
+                    sender_used, to_json, tag, attempts, max_attempts, size, available_at, last_error,
+                    sent_at, created_at, updated_at
              FROM messages ' . $where . ' ORDER BY id DESC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );

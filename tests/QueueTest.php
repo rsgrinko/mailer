@@ -377,9 +377,10 @@ test('подмена отправителя транспортом попада�
     $sent = (new Sender())->send($claimed);
     assertSame('sent', $sent['status']);
 
-    // В базе остаётся отправитель, которого указал клиент
+    // В базе остаётся отправитель, которого указал клиент, а рядом — тот, с которого ушло
     $row = (new MessageRepository())->find($id);
     assertSame('noreply@ahtori.local', (string) $row['from_email']);
+    assertSame('robot@yandex.ru', (string) $row['sender_used']);
 
     $types = [];
     $meta  = [];

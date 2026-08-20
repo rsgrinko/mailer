@@ -95,6 +95,21 @@ final class Migrator
             '0002_users' => $this->usersSchema(),
             '0003_message_indexes' => $this->messageIndexes(),
             '0004_message_fulltext' => $this->messageFulltext(),
+            '0005_message_sender' => $this->messageSender(),
+        ];
+    }
+
+    /**
+     * Адрес, с которого письмо ушло на самом деле. В `from_email` лежит то, что прислал
+     * клиент, а транспорт с `force_from` подменяет отправителя уже на отправке —
+     * без отдельной колонки в карточке письма не понять, почему адрес не тот.
+     *
+     * @return array<int, string>
+     */
+    private function messageSender(): array
+    {
+        return [
+            'ALTER TABLE messages ADD COLUMN sender_used ' . $this->str(191) . ' NULL',
         ];
     }
 

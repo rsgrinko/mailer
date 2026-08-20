@@ -86,16 +86,18 @@ final class Sender
             $info    = $transport->send($message);
 
             // Транспорт мог подставить свой адрес вместо указанного в письме
+            $sender   = trim((string) ($message->from?->email ?? '')) ?: null;
             $replaced = $this->senderReplaced($row, $message);
 
             // Письмо уже ушло, откатывать нечего — но записать об этом нужно всё разом:
             // статус, событие, отметку транспорта и вебхук
-            $this->db->transaction(function () use ($id, $attempt, $transportRow, $transport, $info, $row, $replaced): void {
+            $this->db->transaction(function () use ($id, $attempt, $transportRow, $transport, $info, $row, $replaced, $sender): void {
                 $this->messages->update($id, [
                     'status'         => MessageRepository::SENT,
                     'attempts'       => $attempt,
                     'transport_id'   => (int) $transportRow['id'],
                     'transport_used' => $transport->name(),
+                    'sender_used'    => $sender,
                     'sent_at'        => Database::now(),
                     'locked_by'      => null,
                     'locked_at'      => null,
