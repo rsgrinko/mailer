@@ -10,13 +10,16 @@ declare(strict_types=1);
  * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 ?>
 <div class="row">
     <h1 style="margin:0">Транспорты <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::route('ui.transports.new')) ?>">Добавить транспорт</a>
+    <?php if (View::can(Permission::TRANSPORTS_MANAGE)) { ?>
+        <a class="btn primary" href="<?= View::e(View::route('ui.transports.new')) ?>">Добавить транспорт</a>
+    <?php } ?>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -69,19 +72,26 @@ use Mailer\Ui\View;
                     </td>
                     <td class="nowrap">
                         <div class="row">
-                            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'test'])) ?>">
-                                <?= View::csrf() ?>
-                                <button type="submit">проверить</button>
-                            </form>
-                            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'toggle'])) ?>">
-                                <?= View::csrf() ?>
-                                <button type="submit"><?= (int) $item['active'] === 1 ? 'выключить' : 'включить' ?></button>
-                            </form>
-                            <?php if ((int) $item['is_default'] !== 1) { ?>
-                                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'default'])) ?>">
+                            <?php if (View::can(Permission::TRANSPORTS_TEST)) { ?>
+                                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'test'])) ?>">
                                     <?= View::csrf() ?>
-                                    <button type="submit">сделать основным</button>
+                                    <button type="submit">проверить</button>
                                 </form>
+                            <?php } ?>
+
+                            <?php if (View::can(Permission::TRANSPORTS_MANAGE) && View::owns($item)) { ?>
+                                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'toggle'])) ?>">
+                                    <?= View::csrf() ?>
+                                    <button type="submit"><?= (int) $item['active'] === 1 ? 'выключить' : 'включить' ?></button>
+                                </form>
+                                <?php if ((int) $item['is_default'] !== 1 && View::can(Permission::DATA_ALL)) { ?>
+                                    <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $item['id'], 'action' => 'default'])) ?>">
+                                        <?= View::csrf() ?>
+                                        <button type="submit">сделать основным</button>
+                                    </form>
+                                <?php } ?>
+                            <?php } elseif ((int) ($item['shared'] ?? 0) === 1) { ?>
+                                <span class="muted small">общий</span>
                             <?php } ?>
                         </div>
                     </td>

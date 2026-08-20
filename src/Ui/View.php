@@ -254,6 +254,19 @@ final class View
     }
 
     /**
+     * Своя ли запись. Общий транспорт видят все, но кнопки правки на нём показывать
+     * незачем — их всё равно отклонит контроллер.
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function owns(array $row): bool
+    {
+        $viewer = Auth::viewer();
+
+        return $viewer->isAdmin() || (int) ($row['owner_id'] ?? 0) === $viewer->id();
+    }
+
+    /**
      * Адрес маршрута по его имени: View::route('ui.messages.show', ['id' => 5]).
      * Лишние параметры уходят в query-строку — так удобно тащить фильтры по страницам.
      *
