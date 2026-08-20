@@ -71,15 +71,28 @@ final class EventRepository
      */
     public function latest(int $limit = 50, ?Scope $scope = null): array
     {
-        // Событие принадлежит письму, поэтому и область видимости берём у письма
-        $condition = $scope === null ? '' : $scope->sql('m.owner_id');
+        $limit = max(1, $limit);
 
+        // Своей области видимости нет — видно всё, включая события удалённых писем
+        if ($scope === null || $scope->isAll()) {
+            return $this->db->select(
+                'SELECT e.*, m.uuid, m.subject FROM message_events e
+                 LEFT JOIN messages m ON m.id = e.message_id
+                 ORDER BY e.id DESC LIMIT ' . $limit
+            );
+        }
+
+        // Событие принадлежит письму, поэтому область видимости берём у письма.
+        // Здесь именно INNER JOIN: событие без письма ничьё, а главное — LEFT JOIN
+        // заставляет базу начинать с таблицы событий и сортировать её целиком.
+        // С INNER она вольна пойти от писем владельца по индексу idx_messages_owner,
+        // и это заметно дешевле (замеры — в docs/LOADTEST.md).
         return $this->db->select(
             'SELECT e.*, m.uuid, m.subject FROM message_events e
-             LEFT JOIN messages m ON m.id = e.message_id'
-            . ($condition === '' ? '' : ' WHERE ' . $condition)
-            . ' ORDER BY e.id DESC LIMIT ' . max(1, $limit),
-            $scope === null ? [] : $scope->params()
+             JOIN messages m ON m.id = e.message_id
+             WHERE ' . $scope->sql('m.owner_id') . '
+             ORDER BY e.id DESC LIMIT ' . $limit,
+            $scope->params()
         );
     }
 

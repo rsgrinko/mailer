@@ -13,6 +13,7 @@ use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Http\Router;
 use Mailer\Repository\ProjectRepository;
+use Mailer\Repository\RoleRepository;
 use Mailer\Repository\TemplateRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\UserRepository;
@@ -86,8 +87,12 @@ function httpFixtures(): array
 
     $message = (array) (new Mailer\Repository\MessageRepository())->find((int) $accepted['id']);
 
+    // Роль берём существующую: страница /ui/roles/{id} должна открываться на живой записи
+    $role = (array) (new RoleRepository())->admin();
+
     $fixtures = [
         'key'       => $key,
+        'role'      => (int) ($role['id'] ?? 0),
         'project'   => (int) $project['id'],
         'transport' => $transport,
         'template'  => $template,
@@ -123,7 +128,7 @@ test('все GET-страницы панели открываются', function
         );
 
         // Идентификаторы у каждого раздела свои
-        foreach (['transports' => 'transport', 'projects' => 'project', 'templates' => 'template', 'users' => 'user'] as $section => $key) {
+        foreach (['transports' => 'transport', 'projects' => 'project', 'templates' => 'template', 'users' => 'user', 'roles' => 'role'] as $section => $key) {
             if (str_starts_with($route->pattern, '/ui/' . $section)) {
                 $path = str_replace((string) $ids['message'], (string) $ids[$key], $path);
             }

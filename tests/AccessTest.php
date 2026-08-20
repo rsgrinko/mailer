@@ -14,6 +14,7 @@ use Mailer\Domain\Scope;
 use Mailer\Domain\Viewer;
 use Mailer\Http\Router;
 use Mailer\MailService;
+use Mailer\Repository\EventRepository;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\RoleRepository;
@@ -223,6 +224,40 @@ test('право открывает раздел, а доступ к чужим 
 
     // Выключенная авторизация панели — это полный доступ, как было до разделения прав
     assertTrue(Viewer::full()->can(Permission::SYSTEM_MANAGE));
+});
+
+test('лента событий не теряет свои записи за чужими', function (): void {
+    $ids    = accessFixtures();
+    $events = new EventRepository();
+
+    // Ничьё письмо: его события лягут поверх событий Петра и вытеснят их из окна
+    $noise = (new MailService())->accept([
+        'to'        => 'noise@example.com',
+        'subject'   => 'Шум в ленте событий',
+        'text'      => 'Текст',
+        'transport' => 'транспорт-петра',
+        'sync'      => true,
+    ]);
+
+    for ($i = 0; $i < 60; $i++) {
+        $events->add((int) $noise['id'], EventRepository::ATTEMPT, 'шум №' . $i);
+    }
+
+    // Окно первого шага — limit * 20, то есть 40 событий: своё в него уже не попадает
+    $own = $events->latest(2, Scope::owner($ids['petr']));
+
+    assertSame(2, count($own), 'лента владельца должна набрать запрошенное число событий');
+
+    foreach ($own as $event) {
+        assertSame('Письмо Петра', (string) $event['subject'], 'в ленту попало чужое событие');
+    }
+
+    // Администратору видно всё, и свежее — это шум
+    $all = $events->latest(2, Scope::all());
+
+    assertSame('Шум в ленте событий', (string) $all[0]['subject']);
+
+    (new MessageRepository())->delete((int) $noise['id']);
 });
 
 test('прибираем за собой данные проверок прав', function (): void {
