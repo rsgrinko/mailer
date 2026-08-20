@@ -9,6 +9,7 @@ use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\RoleRepository;
 use Mailer\Support\Config;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -71,9 +72,11 @@ final class RolesController extends ResourceController
         try {
             if ($id > 0) {
                 $this->roles->update($id, $data);
+                Audit::updated('role', $id, 'роль «' . $data['name'] . '», прав: ' . count($data['permissions']));
                 View::flash('Роль сохранена');
             } else {
                 $id = $this->roles->create($data);
+                Audit::created('role', $id, 'роль «' . $data['name'] . '», прав: ' . count($data['permissions']));
                 View::flash('Роль создана');
             }
         } catch (Throwable $e) {
@@ -97,6 +100,7 @@ final class RolesController extends ResourceController
 
         try {
             $this->roles->delete($id);
+            Audit::deleted('role', $id, 'роль «' . $role['name'] . '»');
             View::flash('Роль «' . $role['name'] . '» удалена');
         } catch (Throwable $e) {
             View::flash($e->getMessage(), 'error');

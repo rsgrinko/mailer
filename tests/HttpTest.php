@@ -269,3 +269,83 @@ test('несуществующая запись возвращает в спис
         assertSame($back, $response->headers()['Location'] ?? '', 'вернуть должно на ' . $back);
     }
 });
+
+test('предпросмотр шаблона заполняется примером сам', function (): void {
+    Config::set('ui.auth', false);
+
+    $ids  = httpFixtures();
+    $body = (new UiKernel())->handle(
+        httpRequest('GET', '/ui/templates/' . $ids['template'], [], [], ['sample' => 'auto'])
+    )->body();
+
+    // По переменной {{ name }} подставилось имя, а не пустая заглушка
+    assertContains('{&quot;name&quot;:&quot;Иван&quot;}', $body);
+    assertContains('Привет, Иван', $body);
+});
+
+test('пробное письмо по шаблону уходит из карточки шаблона', function (): void {
+    Config::set('ui.auth', false);
+
+    $ids        = httpFixtures();
+    $transports = new TransportRepository();
+
+    // Пробному письму транспорт не указывают — берётся тот, что по умолчанию
+    $transports->setDefault($ids['transport']);
+
+    $response = (new UiKernel())->handle(httpRequest(
+        'POST',
+        '/ui/templates/' . $ids['template'] . '/send',
+        ['x-csrf-token' => Mailer\Ui\Csrf::token()],
+        ['to' => 'preview@example.com', 'sample' => '{"name":"Иван"}']
+    ));
+
+    assertSame(302, $response->status());
+
+    $sent = (new Mailer\Repository\MessageRepository())->paginate(['search' => 'preview@example.com'], 1, 1);
+    assertSame(1, $sent['total'], 'письмо по шаблону должно попасть в базу');
+    assertSame('Привет, Иван', (string) $sent['items'][0]['subject'], 'тема берётся из шаблона');
+
+    (new Mailer\Repository\MessageRepository())->delete((int) $sent['items'][0]['id']);
+    $transports->update($ids['transport'], ['is_default' => false]);
+});
+
+test('стоп-лист работает через API', function (): void {
+    $ids    = httpFixtures();
+    $kernel = new ApiKernel();
+    $auth   = ['authorization' => 'Bearer ' . $ids['key']];
+
+    // Закрываем адрес и видим его в списке
+    $created = $kernel->handle(httpRequest('POST', '/api/v1/suppressions', $auth, [
+        'email'  => 'API@Example.com',
+        'reason' => 'unsubscribe',
+        'note'   => 'отписался сам',
+    ]));
+
+    assertSame(201, $created->status());
+    assertSame('api@example.com', json_decode($created->body(), true)['email'] ?? '');
+
+    $list = json_decode($kernel->handle(httpRequest('GET', '/api/v1/suppressions', $auth, [], ['search' => 'api@']))->body(), true);
+    assertSame(1, $list['total'] ?? 0, 'закрытый адрес должен попасть в список проекта');
+
+    // Кривой адрес не принимаем
+    assertSame(422, $kernel->handle(httpRequest('POST', '/api/v1/suppressions', $auth, ['email' => 'не адрес']))->status());
+
+    // Письмо такому адресу дальше приёма не идёт
+    $message = $kernel->handle(httpRequest('POST', '/api/v1/messages', $auth, [
+        'to'        => 'api@example.com',
+        'subject'   => 'Письмо закрытому адресу',
+        'text'      => 'Текст',
+        'transport' => 'http-тест-null',
+    ]));
+
+    assertSame('suppressed', json_decode($message->body(), true)['status'] ?? '');
+
+    // И открываем обратно
+    assertSame(200, $kernel->handle(httpRequest('DELETE', '/api/v1/suppressions/api@example.com', $auth))->status());
+    assertSame(404, $kernel->handle(httpRequest('DELETE', '/api/v1/suppressions/api@example.com', $auth))->status());
+
+    $stored = (new Mailer\Repository\MessageRepository())->findAny((string) (json_decode($message->body(), true)['id'] ?? ''));
+    if ($stored !== null) {
+        (new Mailer\Repository\MessageRepository())->delete((int) $stored['id']);
+    }
+});

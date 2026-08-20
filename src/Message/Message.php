@@ -42,6 +42,12 @@ final class Message
     /** Отправитель конверта — то, что уйдёт в MAIL FROM */
     public ?string $envelopeFrom = null;
 
+    /**
+     * Адрес для отказов (VERP). Он важнее конверта: транспорт подставляет в конверт
+     * свой аккаунт, а отказ должен вернуться на ящик, который читает сборщик.
+     */
+    public ?string $returnPath = null;
+
     /** @var array<int, string> Получатели конверта — то, что уйдёт в RCPT TO */
     public array $envelopeTo = [];
 
@@ -79,6 +85,10 @@ final class Message
      */
     public function sender(): string
     {
+        if ($this->returnPath !== null && $this->returnPath !== '') {
+            return $this->returnPath;
+        }
+
         if ($this->envelopeFrom !== null && $this->envelopeFrom !== '') {
             return $this->envelopeFrom;
         }

@@ -21,6 +21,7 @@ use Mailer\Repository\TransportRepository;
 use Mailer\Repository\WebhookRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -211,6 +212,7 @@ final class MessagesController
         switch ($action) {
             case 'retry':
                 if ($this->queue->retry($id, 'Повтор из панели')) {
+                    Audit::action('message', $id, 'письмо возвращено в очередь');
                     View::flash('Письмо возвращено в очередь');
                 } else {
                     View::flash(
@@ -222,6 +224,7 @@ final class MessagesController
 
             case 'cancel':
                 if ($this->queue->cancel($id, 'Отмена из панели')) {
+                    Audit::action('message', $id, 'письмо отменено');
                     View::flash('Письмо отменено');
                 } else {
                     View::flash('Отменить нельзя: письмо уже отправлено или отменено', 'error');
@@ -231,6 +234,7 @@ final class MessagesController
             case 'send':
                 try {
                     $result = $this->service->sendNow($id);
+                    Audit::action('message', $id, 'отправка вручную: ' . $result['status']);
                     View::flash('Результат отправки: ' . $result['status'] . ' — ' . $result['info']);
                 } catch (Throwable $e) {
                     View::flash('Не удалось отправить: ' . $e->getMessage(), 'error');
@@ -239,6 +243,7 @@ final class MessagesController
 
             case 'delete':
                 $this->messages->delete($id);
+                Audit::deleted('message', $id, 'письмо «' . (string) ($row['subject'] ?? '') . '»');
                 View::flash('Письмо удалено');
 
                 return Response::redirect(View::route('ui.messages'));
@@ -277,6 +282,7 @@ final class MessagesController
             }
         });
 
+        Audit::action('message', null, 'массовое действие «' . $action . '» по статусу «' . $status . '», писем: ' . $count);
         View::flash('Обработано писем: ' . $count);
 
         return Response::redirect(View::route('ui.messages', ['status' => $status]));

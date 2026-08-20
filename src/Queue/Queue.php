@@ -8,6 +8,7 @@ use Mailer\Message\Message;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\EventRepository;
 use Mailer\Repository\MessageRepository;
+use Mailer\Repository\SuppressionRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
@@ -22,6 +23,7 @@ final class Queue
     private MessageRepository $messages;
     private EventRepository $events;
     private RateLimiter $limiter;
+    private SuppressionRepository $suppressions;
     private Logger $logger;
 
     public function __construct(
@@ -30,11 +32,12 @@ final class Queue
         ?EventRepository $events = null,
         ?RateLimiter $limiter = null
     ) {
-        $this->db       = $db ?? Database::instance();
-        $this->messages = $messages ?? new MessageRepository($this->db);
-        $this->events   = $events ?? new EventRepository($this->db);
-        $this->limiter  = $limiter ?? new RateLimiter($this->db);
-        $this->logger   = new Logger('queue');
+        $this->db           = $db ?? Database::instance();
+        $this->messages     = $messages ?? new MessageRepository($this->db);
+        $this->events       = $events ?? new EventRepository($this->db);
+        $this->limiter      = $limiter ?? new RateLimiter($this->db);
+        $this->suppressions = new SuppressionRepository($this->db);
+        $this->logger       = new Logger('queue');
     }
 
     /**
@@ -71,6 +74,11 @@ final class Queue
             }
         }
 
+        // Стоп-лист: закрытые адреса убираем из письма ещё до записи в базу.
+        // Не осталось ни одного получателя — письмо сохраняем, но отправлять нечего
+        $suppressed = $this->suppressed($message, $projectId);
+        $status     = $message->recipients() === [] ? MessageRepository::SUPPRESSED : MessageRepository::QUEUED;
+
         $uuid = \Mailer\Support\Str::uuid();
 
         // Вложения кладём на диск: в базе хранить их незачем
@@ -91,7 +99,7 @@ final class Queue
             'owner_id'        => (int) ($options['owner_id'] ?? ($project['owner_id'] ?? 0)),
             'transport_id'    => $options['transport_id'] ?? null,
             'source'          => $options['source'] ?? MessageRepository::SOURCE_API,
-            'status'          => MessageRepository::QUEUED,
+            'status'          => $status,
             'available_at'    => $availableAt,
             'max_attempts'    => (int) ($options['max_attempts'] ?? Config::get('queue.max_attempts', 5)),
             'template'        => $options['template'] ?? null,
@@ -105,6 +113,23 @@ final class Queue
             'recipients' => $message->recipients(),
         ]);
 
+        if ($suppressed !== []) {
+            $this->events->add(
+                $id,
+                EventRepository::SUPPRESSED,
+                $status === MessageRepository::SUPPRESSED
+                    ? 'Все получатели в стоп-листе, письмо не отправляется'
+                    : 'Часть получателей в стоп-листе, им письмо не уйдёт',
+                ['recipients' => $suppressed]
+            );
+
+            $this->logger->info('Письмо задето стоп-листом', [
+                'uuid'       => $uuid,
+                'recipients' => array_keys($suppressed),
+                'status'     => $status,
+            ]);
+        }
+
         if ($projectId !== null) {
             $this->limiter->hitProject($projectId);
         }
@@ -115,7 +140,44 @@ final class Queue
             'to'      => $message->recipients(),
         ]);
 
-        return ['id' => $id, 'uuid' => $uuid, 'status' => MessageRepository::QUEUED, 'duplicate' => false];
+        return ['id' => $id, 'uuid' => $uuid, 'status' => $status, 'duplicate' => false];
+    }
+
+    /**
+     * Убирает из письма адреса, закрытые стоп-листом, и возвращает их с причиной.
+     * Пустой список получателей после этого означает, что отправлять некому.
+     *
+     * @return array<string, string> адрес => причина
+     */
+    private function suppressed(Message $message, ?int $projectId): array
+    {
+        $blocked = $this->suppressions->blocked($message->recipients(), $projectId);
+
+        if ($blocked === []) {
+            return [];
+        }
+
+        $keep = static fn (array $addresses): array => array_values(array_filter(
+            $addresses,
+            static fn ($address): bool => !isset($blocked[SuppressionRepository::normalize($address->email)])
+        ));
+
+        $message->to  = $keep($message->to);
+        $message->cc  = $keep($message->cc);
+        $message->bcc = $keep($message->bcc);
+
+        // У писем из sendmail и SMTP-релея получатели заданы конвертом
+        $message->envelopeTo = array_values(array_filter(
+            $message->envelopeTo,
+            static fn (string $email): bool => !isset($blocked[SuppressionRepository::normalize($email)])
+        ));
+
+        $reasons = [];
+        foreach ($blocked as $email => $row) {
+            $reasons[(string) $email] = (string) $row['reason'];
+        }
+
+        return $reasons;
     }
 
     /**

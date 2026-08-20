@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mailer\Http;
 
 use Mailer\Http\Middleware\ApiKey;
+use Mailer\Http\Middleware\MetricsToken;
 use Mailer\Storage\StorageException;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
@@ -83,6 +84,7 @@ final class ApiKernel
         if ($this->router === null) {
             $this->router = (new Router())
                 ->middleware('api-key', new ApiKey(null, $this->logger))
+                ->middleware('metrics-token', new MetricsToken())
                 ->load(MAILER_ROOT . '/routes/api.php');
         }
 

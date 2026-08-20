@@ -20,6 +20,8 @@ tags:
     description: письма — приём, статус, список, повтор, отмена
   - name: templates
     description: шаблоны писем
+  - name: suppressions
+    description: стоп-лист адресов
   - name: health
     description: состояние сервиса
 
@@ -280,6 +282,99 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/ServerError' }
 
+  /suppressions:
+    get:
+      tags: [suppressions]
+      summary: Стоп-лист проекта
+      description: |
+        Адреса, которым сервис не пишет. Видно записи своего проекта и общие
+        (`project_id: null`) — те, что закрыты для всех проектов.
+      operationId: listSuppressions
+      parameters:
+        - name: reason
+          in: query
+          schema: { type: string, enum: [bounce, complaint, unsubscribe, manual] }
+        - name: search
+          in: query
+          description: часть адреса
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 30 }
+      responses:
+        '200':
+          description: страница списка
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Suppression' }
+                  total: { type: integer, example: 1 }
+                  page:  { type: integer, example: 1 }
+                  pages: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+    post:
+      tags: [suppressions]
+      summary: Закрыть адрес
+      description: Адрес закрывается только для вашего проекта.
+      operationId: createSuppression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:  { type: string, format: email, example: ivan@example.com }
+                reason: { type: string, enum: [bounce, complaint, unsubscribe, manual], default: manual }
+                note:   { type: string, example: отписался сам }
+      responses:
+        '201':
+          description: адрес закрыт
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Suppression' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /suppressions/{email}:
+    delete:
+      tags: [suppressions]
+      summary: Открыть адрес обратно
+      description: |
+        Снимает запись своего проекта. Адрес, закрытый для всех проектов, через API
+        не открывается — это делает администратор в панели.
+      operationId: deleteSuppression
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: email }
+      responses:
+        '200':
+          description: адрес открыт
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:   { type: string, example: ivan@example.com }
+                  removed: { type: integer, example: 1 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
   /health:
     get:
       tags: [health]
@@ -380,8 +475,20 @@ components:
       type: string
       description: |
         `queued` — ждёт отправки, `sending` — отправляется прямо сейчас, `sent` — отправлено,
-        `failed` — не удалось, `canceled` — отменено.
-      enum: [queued, sending, sent, failed, canceled]
+        `failed` — не удалось, `canceled` — отменено, `suppressed` — все получатели в стоп-листе.
+      enum: [queued, sending, sent, failed, canceled, suppressed]
+
+    Suppression:
+      type: object
+      properties:
+        id:         { type: integer, example: 12 }
+        email:      { type: string, example: ivan@example.com }
+        reason:     { type: string, enum: [bounce, complaint, unsubscribe, manual] }
+        source:     { type: string, description: откуда взялась запись, example: bounce }
+        project_id: { type: integer, nullable: true, description: пусто — адрес закрыт для всех проектов }
+        note:       { type: string, nullable: true, example: '550 5.1.1 user unknown' }
+        expires_at: { type: string, nullable: true, example: '2026-02-01 10:00:00' }
+        created_at: { type: string, example: '2026-01-01 10:00:00' }
 
     Address:
       description: адрес в любом виде — `user@example.com`, `Иван <ivan@example.com>` или объект
@@ -523,7 +630,7 @@ components:
       properties:
         type:
           type: string
-          enum: [accepted, attempt, sent, failed, retry, canceled, requeued, webhook, sender]
+          enum: [accepted, attempt, sent, failed, retry, canceled, requeued, webhook, sender, suppressed]
         message: { type: string }
         at:      { type: string, example: "2026-01-01 10:00:02" }
 

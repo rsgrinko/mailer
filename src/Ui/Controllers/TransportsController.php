@@ -14,6 +14,7 @@ use Mailer\Repository\TransportRepository;
 use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
 use Mailer\Transport\TransportFactory;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -172,9 +173,11 @@ final class TransportsController extends ResourceController
         try {
             if ($id > 0) {
                 $this->transports->update($id, $data);
+                Audit::updated('transport', $id, 'транспорт «' . $data['name'] . '»');
                 View::flash('Транспорт сохранён');
             } else {
                 $id = $this->transports->create($data);
+                Audit::created('transport', $id, 'транспорт «' . $data['name'] . '» (' . $data['type'] . ')');
                 View::flash('Транспорт создан');
             }
         } catch (Throwable $e) {
@@ -223,16 +226,19 @@ final class TransportsController extends ResourceController
 
             case 'default':
                 $this->transports->setDefault($id);
+                Audit::action('transport', $id, 'транспорт «' . $transport['name'] . '» сделан основным');
                 View::flash('Транспорт «' . $transport['name'] . '» теперь основной');
                 break;
 
             case 'toggle':
                 $this->transports->update($id, ['active' => (int) $transport['active'] !== 1]);
+                Audit::updated('transport', $id, ((int) $transport['active'] === 1 ? 'выключен' : 'включён') . ' транспорт «' . $transport['name'] . '»');
                 View::flash((int) $transport['active'] === 1 ? 'Транспорт выключен' : 'Транспорт включён');
                 break;
 
             case 'delete':
                 $this->transports->delete($id);
+                Audit::deleted('transport', $id, 'транспорт «' . $transport['name'] . '»');
                 View::flash('Транспорт удалён');
 
                 return Response::redirect(View::route('ui.transports'));

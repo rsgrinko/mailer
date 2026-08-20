@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Mailer\Queue;
 
+use Mailer\Bounce\Collector;
 use Mailer\RateLimit\RateLimiter;
+use Mailer\Repository\AuditRepository;
 use Mailer\Repository\SettingRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
@@ -25,6 +27,7 @@ final class Worker
     /** Сюда кладут время запроса на перезапуск: воркер увидит его и выйдет */
     public const RESTART_KEY = 'worker:restart';
 
+    private Database $db;
     private Queue $queue;
     private Sender $sender;
     private WebhookSender $webhooks;
@@ -46,10 +49,14 @@ final class Worker
     /** Когда в последний раз чистили логи — чаще раза в сутки незачем */
     private int $logsPurgedAt = 0;
 
+    /** Когда в последний раз заглядывали в ящик отказов */
+    private int $bouncesFetchedAt = 0;
+
     public function __construct(?Database $db = null, ?callable $output = null)
     {
         $db = $db ?? Database::instance();
 
+        $this->db       = $db;
         $this->queue    = new Queue($db);
         $this->sender   = new Sender($db);
         $this->webhooks = new WebhookSender($db);
@@ -109,6 +116,7 @@ final class Worker
                 }
                 $this->limiter->cleanup();
                 $this->purgeLogs();
+                $this->fetchBounces();
             }
             $tick++;
 
@@ -177,6 +185,35 @@ final class Worker
     }
 
     /**
+     * Заглядывает в ящик отказов и закрывает адреса недоставленных писем.
+     * Ошибки сборщика не должны ронять очередь: почта отдельно, отказы отдельно.
+     */
+    private function fetchBounces(): void
+    {
+        if (!Collector::enabled()) {
+            return;
+        }
+
+        $interval = max(60, (int) Config::get('bounce.interval', 300));
+
+        if (time() - $this->bouncesFetchedAt < $interval) {
+            return;
+        }
+
+        $this->bouncesFetchedAt = time();
+
+        try {
+            $result = (new Collector($this->db))->run();
+
+            if ($result['fetched'] > 0) {
+                $this->say('Разобрано отказов: ' . $result['fetched'] . ', закрыто адресов: ' . $result['suppressed']);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('Не удалось разобрать ящик отказов', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Раз в сутки убирает старые файлы логов: иначе var/log растёт бесконечно.
      */
     private function purgeLogs(): void
@@ -190,6 +227,27 @@ final class Worker
 
         if ($removed !== []) {
             $this->logger->info('Удалены старые логи', ['files' => $removed]);
+        }
+
+        $this->purgeAudit();
+    }
+
+    /**
+     * Журнал действий панели растёт без остановки, поэтому чистим его тем же заходом.
+     * Ноль в настройке — хранить всё.
+     */
+    private function purgeAudit(): void
+    {
+        $days = (int) Config::get('ui.audit_keep_days', 180);
+
+        if ($days <= 0) {
+            return;
+        }
+
+        $removed = (new AuditRepository())->purge($days);
+
+        if ($removed > 0) {
+            $this->logger->info('Удалены старые записи журнала действий', ['count' => $removed, 'days' => $days]);
         }
     }
 

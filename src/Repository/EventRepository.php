@@ -21,6 +21,7 @@ final class EventRepository
     public const REQUEUED  = 'requeued';
     public const WEBHOOK   = 'webhook';
     public const SENDER    = 'sender';
+    public const SUPPRESSED = 'suppressed';
 
     private Database $db;
 

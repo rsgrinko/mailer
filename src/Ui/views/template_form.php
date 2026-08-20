@@ -11,6 +11,7 @@ declare(strict_types=1);
  * @var string $sample
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Ui\View;
 
 $isNew = $template === null;
@@ -73,7 +74,10 @@ $isNew = $template === null;
                 <span>Данные для подстановки (JSON)</span>
                 <input type="text" name="sample" value="<?= View::e($sample) ?>" placeholder='{"name": "Иван", "site": "example.com"}'>
             </label>
-            <button type="submit">Показать</button>
+            <div class="row">
+                <button type="submit">Показать</button>
+                <a class="btn" href="<?= View::e(View::route('ui.templates.show', ['id' => $template['id'], 'sample' => 'auto'])) ?>">Заполнить примером</a>
+            </div>
         </form>
 
         <?php if ($preview !== null) { ?>
@@ -93,6 +97,24 @@ $isNew = $template === null;
             </div>
         <?php } ?>
     </div>
+
+    <?php if (View::can(Permission::MESSAGES_SEND)) { ?>
+        <div class="card">
+            <h2>Пробное письмо</h2>
+            <p class="small muted">Уйдёт через транспорт по умолчанию, с теми же данными, что и в предпросмотре.</p>
+            <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'send'])) ?>">
+                <?= View::csrf() ?>
+                <input type="hidden" name="sample" value="<?= View::e($sample) ?>">
+                <div class="row">
+                    <label style="flex:1; margin:0">
+                        <span>Кому</span>
+                        <input type="email" name="to" required placeholder="ivan@example.com">
+                    </label>
+                    <button class="primary" type="submit" style="align-self:end">Отправить</button>
+                </div>
+            </form>
+        </div>
+    <?php } ?>
 
     <div class="card">
         <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить шаблон?')">

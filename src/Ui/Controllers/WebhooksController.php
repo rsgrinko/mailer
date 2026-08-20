@@ -10,6 +10,7 @@ use Mailer\Http\Response;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\WebhookRepository;
 use Mailer\Support\Config;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Mailer\Webhook\WebhookSender;
 
@@ -87,6 +88,7 @@ final class WebhooksController
 
             case 'delete':
                 $this->webhooks->delete($id);
+                Audit::deleted('webhook', $id, 'доставка вебхука «' . (string) $item['event'] . '»');
                 View::flash('Запись удалена');
                 break;
 

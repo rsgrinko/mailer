@@ -18,7 +18,14 @@ use Mailer\Ui\View;
 // Имена проектов берём из того же списка, что и фильтр — лишний запрос не нужен
 $projectNames = array_column($projects, 'name', 'id');
 
-$statuses = ['queued' => 'в очереди', 'sending' => 'отправляется', 'sent' => 'отправлено', 'failed' => 'ошибка', 'canceled' => 'отменено'];
+$statuses = [
+    'queued'     => 'в очереди',
+    'sending'    => 'отправляется',
+    'sent'       => 'отправлено',
+    'failed'     => 'ошибка',
+    'canceled'   => 'отменено',
+    'suppressed' => 'в стоп-листе',
+];
 $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-релей', 'cli' => 'CLI', 'ui' => 'панель'];
 ?>
 <h1>Письма <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>

@@ -14,11 +14,13 @@ declare(strict_types=1);
 use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Http\Router;
+use Mailer\Ui\Controllers\AuditController;
 use Mailer\Ui\Controllers\AuthController;
 use Mailer\Ui\Controllers\DashboardController;
 use Mailer\Ui\Controllers\MessagesController;
 use Mailer\Ui\Controllers\ProjectsController;
 use Mailer\Ui\Controllers\RolesController;
+use Mailer\Ui\Controllers\SuppressionsController;
 use Mailer\Ui\Controllers\TemplatesController;
 use Mailer\Ui\Controllers\TransportsController;
 use Mailer\Ui\Controllers\UsersController;
@@ -53,6 +55,9 @@ return static function (Router $router): void {
             });
             $router->group(['middleware' => 'can:system.manage'], static function (Router $router): void {
                 $router->post('/system/{action}', [DashboardController::class, 'systemAction'])->name('ui.system.action');
+            });
+            $router->group(['middleware' => 'can:audit.view'], static function (Router $router): void {
+                $router->get('/audit', [AuditController::class, 'index'])->name('ui.audit');
             });
             $router->group(['middleware' => 'can:logs.view'], static function (Router $router): void {
                 $router->get('/logs', [DashboardController::class, 'logs'])->name('ui.logs');
@@ -110,6 +115,15 @@ return static function (Router $router): void {
                 $router->get('/templates/new', [TemplatesController::class, 'form'])->name('ui.templates.new');
                 $router->post('/templates/save', [TemplatesController::class, 'save'])->name('ui.templates.save');
                 $router->post('/templates/{id:\d+}/{action}', [TemplatesController::class, 'action'])->name('ui.templates.action');
+            });
+
+            // Стоп-лист адресов
+            $router->group(['middleware' => 'can:suppressions.view'], static function (Router $router): void {
+                $router->get('/suppressions', [SuppressionsController::class, 'index'])->name('ui.suppressions');
+            });
+            $router->group(['middleware' => 'can:suppressions.manage'], static function (Router $router): void {
+                $router->post('/suppressions', [SuppressionsController::class, 'store'])->name('ui.suppressions.store');
+                $router->post('/suppressions/{id:\d+}/delete', [SuppressionsController::class, 'delete'])->name('ui.suppressions.delete');
             });
 
             // Вебхуки

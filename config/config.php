@@ -22,6 +22,8 @@ return [
         'timezone' => Env::string('APP_TIMEZONE', 'Europe/Moscow'),
         // Домен, от которого формируются Message-ID
         'hostname' => Env::string('APP_HOSTNAME', 'localhost'),
+        // Адрес, по которому сервис доступен снаружи: нужен ссылке отписки в письмах
+        'url'      => rtrim(Env::string('APP_URL', ''), '/'),
     ],
 
     // База данных: sqlite по умолчанию, mysql — когда появятся доступы
@@ -111,6 +113,47 @@ return [
         'backoff'      => [30, 120, 600, 1800, 7200],
     ],
 
+    // Отписка одной кнопкой (List-Unsubscribe, RFC 8058)
+    'unsubscribe' => [
+        // Включает заголовки отписки во всех письмах; у проекта можно выключить
+        'enabled' => Env::bool('UNSUBSCRIBE_ENABLED', false),
+    ],
+
+    // Ящик, куда возвращаются недоставленные письма
+    'bounce' => [
+        'enabled'    => Env::bool('BOUNCE_ENABLED', false),
+        'host'       => Env::string('BOUNCE_HOST', ''),
+        'port'       => Env::int('BOUNCE_PORT', 995),
+        // ssl | tls | none
+        'encryption' => Env::string('BOUNCE_ENCRYPTION', 'ssl'),
+        'username'   => Env::string('BOUNCE_USERNAME', ''),
+        'password'   => Env::string('BOUNCE_PASSWORD', ''),
+        // Удалять разобранные письма из ящика (иначе следующий заход прочитает их снова)
+        'delete'     => Env::bool('BOUNCE_DELETE', true),
+        // Сколько писем забирать за один заход
+        'limit'      => Env::int('BOUNCE_LIMIT', 50),
+        // Как часто воркер заглядывает в ящик, секунды
+        'interval'   => Env::int('BOUNCE_INTERVAL', 300),
+        // Обратный адрес для отказов. С verp письмо уходит с адресом вида
+        // bounce+<uuid>@домен — по нему отказ сразу привязывается к письму.
+        // Яндекс и подобные такой конверт не примут: включать на своём сервере
+        'address'    => Env::string('BOUNCE_ADDRESS', ''),
+        'verp'       => Env::bool('BOUNCE_VERP', false),
+    ],
+
+    // Стоп-лист адресов
+    'suppression' => [
+        // Закрывать адрес самим, когда сервер получателя ответил «нет такого ящика»
+        'auto_bounce' => Env::bool('SUPPRESSION_AUTO_BOUNCE', true),
+    ],
+
+    // Метрики для Prometheus (адрес /metrics)
+    'metrics' => [
+        'enabled' => Env::bool('METRICS_ENABLED', true),
+        // Пустой токен — адрес открыт, закрывайте его на nginx
+        'token'   => Env::string('METRICS_TOKEN', ''),
+    ],
+
     // Веб-панель
     'ui' => [
         'per_page' => Env::int('UI_PER_PAGE', 30),
@@ -122,5 +165,7 @@ return [
         'session_lifetime' => Env::int('UI_SESSION_LIFETIME', 43200),
         // Разрешить кнопки «повторить», «отменить», «удалить», «тестовое письмо»
         'allow_actions' => Env::bool('UI_ALLOW_ACTIONS', true),
+        // Сколько дней хранить журнал действий панели (0 — хранить всегда)
+        'audit_keep_days' => Env::int('UI_AUDIT_KEEP_DAYS', 180),
     ],
 ];

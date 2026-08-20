@@ -12,6 +12,7 @@ use Mailer\Security\Password;
 use Mailer\Support\Config;
 use Mailer\Support\MailerException;
 use Mailer\Ui\Auth;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -87,6 +88,7 @@ final class UsersController extends ResourceController
                     'role_id'  => $roleId,
                 ]);
 
+                Audit::created('user', (int) $user['id'], 'пользователь «' . $user['login'] . '»');
                 View::flash('Пользователь «' . $user['login'] . '» создан');
 
                 return Response::redirect(View::route('ui.users'));
@@ -108,6 +110,7 @@ final class UsersController extends ResourceController
                 $this->users->setPassword($id, $password);
             }
 
+            Audit::updated('user', $id, 'пользователь «' . $login . '»' . ($password !== '' ? ', сменён пароль' : ''));
             View::flash('Пользователь сохранён');
 
             return Response::redirect(View::route('ui.users'));
@@ -134,22 +137,26 @@ final class UsersController extends ResourceController
             switch ($action) {
                 case 'delete':
                     $this->users->delete($id);
+                    Audit::deleted('user', $id, 'пользователь «' . $user['login'] . '»');
                     View::flash('Пользователь «' . $user['login'] . '» удалён');
                     break;
 
                 case 'enable':
                     $this->users->update($id, ['active' => true]);
+                    Audit::updated('user', $id, 'включён пользователь «' . $user['login'] . '»');
                     View::flash('Пользователь «' . $user['login'] . '» включён');
                     break;
 
                 case 'disable':
                     $this->users->update($id, ['active' => false]);
+                    Audit::updated('user', $id, 'отключён пользователь «' . $user['login'] . '»');
                     View::flash('Пользователь «' . $user['login'] . '» отключён');
                     break;
 
                 case 'password':
                     $password = Password::generate();
                     $this->users->setPassword($id, $password);
+                    Audit::action('user', $id, 'сброшен пароль пользователя «' . $user['login'] . '»');
                     View::flash('Новый пароль для «' . $user['login'] . '»: ' . $password);
                     break;
 

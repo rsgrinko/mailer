@@ -27,9 +27,11 @@ $menu = [
     'transports' => ['Транспорты', 'ui.transports', Permission::TRANSPORTS_VIEW],
     'projects'   => ['Проекты', 'ui.projects', Permission::PROJECTS_VIEW],
     'templates'  => ['Шаблоны', 'ui.templates', Permission::TEMPLATES_VIEW],
+    'suppress'   => ['Стоп-лист', 'ui.suppressions', Permission::SUPPRESSIONS_VIEW],
     'webhooks'   => ['Вебхуки', 'ui.webhooks', Permission::WEBHOOKS_VIEW],
     'users'      => ['Пользователи', 'ui.users', Permission::USERS_MANAGE],
     'roles'      => ['Роли', 'ui.roles', Permission::ROLES_MANAGE],
+    'audit'      => ['Журнал', 'ui.audit', Permission::AUDIT_VIEW],
     'logs'       => ['Логи', 'ui.logs', Permission::LOGS_VIEW],
     'system'     => ['Состояние', 'ui.system', Permission::SYSTEM_VIEW],
 ];
@@ -172,6 +174,7 @@ $menu = [
         .badge.sent { background: var(--ok-bg); color: var(--ok); }
         .badge.failed { background: var(--err-bg); color: var(--err); }
         .badge.canceled { background: var(--border); color: var(--muted); }
+        .badge.suppressed { background: var(--warn-bg); color: var(--warn); }
         .badge.delivered { background: var(--ok-bg); color: var(--ok); }
         .badge.muted { background: var(--border); color: var(--muted); }
 

@@ -21,8 +21,10 @@ final class MessageRepository
     public const SENT     = 'sent';
     public const FAILED   = 'failed';
     public const CANCELED = 'canceled';
+    /** Все получатели закрыты стоп-листом — письмо даже не пробовали отправить */
+    public const SUPPRESSED = 'suppressed';
 
-    public const STATUSES = [self::QUEUED, self::SENDING, self::SENT, self::FAILED, self::CANCELED];
+    public const STATUSES = [self::QUEUED, self::SENDING, self::SENT, self::FAILED, self::CANCELED, self::SUPPRESSED];
 
     /** Слова короче этого полнотекстовый индекс MySQL не хранит (innodb_ft_min_token_size) */
     private const SEARCH_MIN_WORD = 3;
@@ -476,6 +478,17 @@ final class MessageRepository
                 $params
             ),
         ];
+    }
+
+    /**
+     * Когда последний раз что-то ушло. По этой метрике видно замершую очередь:
+     * писем нет — и мониторинг молчит, а отправка уже не работает.
+     */
+    public function lastSentAt(): ?string
+    {
+        $value = $this->db->value("SELECT MAX(sent_at) FROM messages WHERE status = 'sent'");
+
+        return $value === null ? null : (string) $value;
     }
 
     /**

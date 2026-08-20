@@ -88,7 +88,7 @@ sendmail_path = /var/www/mailer/bin/mailer-sendmail -t -i
 - [docs/SDK.md](docs/SDK.md) — мини-SDK для PHP и примеры.
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — подключение приложений без SDK.
 - [docs/DEPLOY.md](docs/DEPLOY.md) — установка на сервер: nginx, systemd, MySQL.
-- [docs/OPERATIONS.md](docs/OPERATIONS.md) — эксплуатация: панель, команды, разбор проблем.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — эксплуатация: панель, журнал действий, метрики, разбор проблем.
 
 ## Требования
 

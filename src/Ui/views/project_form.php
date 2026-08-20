@@ -70,6 +70,14 @@ $isNew = $project === null;
                 <span>Проект активен</span>
             </label>
 
+            <label class="inline">
+                <input type="checkbox" name="unsubscribe" <?= !$isNew && (int) ($project['unsubscribe'] ?? 0) === 1 ? 'checked' : '' ?>>
+                <span>Кнопка «отписаться» в письмах</span>
+            </label>
+            <p class="small muted">Почтовые клиенты покажут её сами (List-Unsubscribe). Нужна массовым
+                рассылкам — Gmail и Mail.ru без неё складывают письма в спам. Служебным письмам
+                вроде сброса пароля не нужна. Работает, если задан APP_URL и включён UNSUBSCRIBE_ENABLED.</p>
+
             <?php if ($owners !== []) { ?>
                 <label>
                     <span>Владелец</span>

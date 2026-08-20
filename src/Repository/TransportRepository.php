@@ -49,6 +49,14 @@ final class TransportRepository
     }
 
     /**
+     * Сколько транспортов включено — для метрик и проверки состояния.
+     */
+    public function countActive(): int
+    {
+        return (int) $this->db->value('SELECT COUNT(*) FROM transports WHERE active = 1');
+    }
+
+    /**
      * Страница списка транспортов.
      *
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}

@@ -28,9 +28,13 @@ final class Permission
     public const TEMPLATES_VIEW   = 'templates.view';
     public const TEMPLATES_MANAGE = 'templates.manage';
 
+    public const SUPPRESSIONS_VIEW   = 'suppressions.view';
+    public const SUPPRESSIONS_MANAGE = 'suppressions.manage';
+
     public const WEBHOOKS_VIEW   = 'webhooks.view';
     public const WEBHOOKS_MANAGE = 'webhooks.manage';
 
+    public const AUDIT_VIEW    = 'audit.view';
     public const LOGS_VIEW     = 'logs.view';
     public const SYSTEM_VIEW   = 'system.view';
     public const SYSTEM_MANAGE = 'system.manage';
@@ -65,11 +69,16 @@ final class Permission
             self::TEMPLATES_VIEW   => 'Смотреть шаблоны',
             self::TEMPLATES_MANAGE => 'Заводить и править',
         ],
+        'Стоп-лист' => [
+            self::SUPPRESSIONS_VIEW   => 'Смотреть закрытые адреса',
+            self::SUPPRESSIONS_MANAGE => 'Закрывать и открывать адреса',
+        ],
         'Вебхуки' => [
             self::WEBHOOKS_VIEW   => 'Смотреть очередь вебхуков',
             self::WEBHOOKS_MANAGE => 'Повторять и удалять доставки',
         ],
         'Сервис' => [
+            self::AUDIT_VIEW    => 'Читать журнал действий',
             self::LOGS_VIEW     => 'Читать логи',
             self::SYSTEM_VIEW   => 'Смотреть состояние сервиса',
             self::SYSTEM_MANAGE => 'Перезапускать воркер, чистить очередь',
@@ -158,6 +167,8 @@ final class Permission
             self::TRANSPORTS_TEST,
             self::TEMPLATES_VIEW,
             self::TEMPLATES_MANAGE,
+            self::SUPPRESSIONS_VIEW,
+            self::SUPPRESSIONS_MANAGE,
             self::WEBHOOKS_VIEW,
         ];
     }

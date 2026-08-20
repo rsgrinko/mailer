@@ -29,8 +29,10 @@ if ($request->path === '/ui' || str_starts_with($request->path, '/ui/')) {
     return;
 }
 
-// API
-if (str_starts_with($request->path, '/api/')) {
+// API, метрики и отписка по ссылке из письма
+if (str_starts_with($request->path, '/api/')
+    || $request->path === '/metrics'
+    || str_starts_with($request->path, '/unsubscribe/')) {
     (new ApiKernel())->handle($request)->send();
 
     return;

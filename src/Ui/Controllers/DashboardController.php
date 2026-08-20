@@ -22,6 +22,7 @@ use Mailer\Storage\Migrator;
 use Mailer\Support\Cache;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 
 /**
@@ -129,21 +130,25 @@ final class DashboardController
         switch ($action) {
             case 'migrate':
                 $applied = (new Migrator($db))->run();
+                Audit::action('system', null, $applied === [] ? 'миграции: новых нет' : 'применены миграции: ' . implode(', ', $applied));
                 View::flash($applied === [] ? 'Новых миграций нет' : 'Применены миграции: ' . implode(', ', $applied));
                 break;
 
             case 'requeue':
                 $count = (new Queue($db))->requeueStuck();
+                Audit::action('system', null, 'возвращено зависших писем: ' . $count);
                 View::flash('Возвращено в очередь зависших писем: ' . $count);
                 break;
 
             case 'cleanup-counters':
                 $count = (new RateLimiter($db))->cleanup();
+                Audit::action('system', null, 'удалено устаревших счётчиков: ' . $count);
                 View::flash('Удалено устаревших счётчиков: ' . $count);
                 break;
 
             case 'reset-counters':
                 (new RateLimiter($db))->resetAll();
+                Audit::action('system', null, 'счётчики лимитов сброшены');
                 View::flash('Счётчики лимитов сброшены');
                 break;
 
@@ -151,17 +156,20 @@ final class DashboardController
                 $days    = (int) ($request->input('days', 30));
                 $status  = (string) $request->input('status', MessageRepository::SENT);
                 $deleted = $this->messages->purge($status, $days);
+                Audit::action('system', null, 'чистка писем со статусом «' . $status . '» старше ' . $days . ' дней, удалено: ' . $deleted);
                 View::flash('Удалено писем: ' . $deleted);
                 break;
 
             case 'restart-worker':
                 Worker::requestRestart($db);
+                Audit::action('system', null, 'запрошен перезапуск воркера');
                 View::flash('Воркер получит запрос в ближайшие секунды и перезапустится');
                 break;
 
             case 'worker-once':
                 $processed = (new Worker($db, static function (string $line): void {
                 }))->run(true);
+                Audit::action('system', null, 'разовый проход воркера, обработано писем: ' . $processed);
                 View::flash('Разовый проход воркера завершён, обработано писем: ' . $processed);
                 break;
 
@@ -263,7 +271,7 @@ final class DashboardController
      */
     private function tableSizes(Database $db): array
     {
-        $tables = ['messages', 'message_events', 'projects', 'transports', 'templates', 'webhook_deliveries', 'counters', 'settings', 'users'];
+        $tables = ['messages', 'message_events', 'projects', 'transports', 'templates', 'webhook_deliveries', 'counters', 'settings', 'users', 'audit_log'];
         $result = [];
 
         foreach ($tables as $table) {

@@ -156,7 +156,7 @@ GET /api/v1/messages/{id}
 ```
 
 Статусы: `queued` — ждёт отправки, `sending` — отправляется прямо сейчас, `sent` — отправлено,
-`failed` — не удалось, `canceled` — отменено.
+`failed` — не удалось, `canceled` — отменено, `suppressed` — все получатели в стоп-листе.
 
 ## Список писем
 
@@ -224,6 +224,64 @@ GET /api/v1/health
 
 `status` бывает `ok`, `degraded` (например, молчит воркер) и `error` (недоступна база,
 код ответа 503).
+
+## Стоп-лист
+
+Адресам из стоп-листа сервис не пишет: письмо им отсеивается на приёме. Если закрыты
+все получатели, письмо принимается со статусом `suppressed` и никуда не уходит.
+
+```
+GET /api/v1/suppressions?reason=bounce&search=example.com&page=1
+```
+
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "email": "ivan@example.com",
+      "reason": "bounce",
+      "source": "bounce",
+      "project_id": null,
+      "note": "550 5.1.1 user unknown",
+      "expires_at": null,
+      "created_at": "2026-01-01 10:00:00"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pages": 1
+}
+```
+
+Видно записи своего проекта и общие (`project_id: null`) — те, что закрыты для всех.
+
+```
+POST /api/v1/suppressions
+{"email": "ivan@example.com", "reason": "unsubscribe", "note": "отписался"}
+```
+
+`reason` — `bounce`, `complaint`, `unsubscribe` или `manual` (по умолчанию). Адрес
+закрывается только для вашего проекта. Ответ — `201` с созданной записью.
+
+```
+DELETE /api/v1/suppressions/ivan@example.com
+```
+
+Снимает запись своего проекта. Адрес, закрытый для всех (обычно это отказ почтового
+сервера), через API не открывается — ответ `403`, снять его может администратор в панели.
+
+## Метрики
+
+```
+GET /metrics
+GET /api/v1/metrics
+```
+
+Состояние сервиса в формате Prometheus: очередь, письма по статусам, воркер, вебхуки.
+Ключ проекта здесь не работает — доступ закрывает свой токен `METRICS_TOKEN`
+(`Authorization: Bearer <токен>` или `?token=`). Подробности и список метрик —
+в `docs/OPERATIONS.md`.
 
 ## Ошибки
 

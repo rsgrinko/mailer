@@ -37,6 +37,15 @@ server {
         try_files $uri /index.php$is_args$args;
     }
 
+    # Метрики для Prometheus. Токен задаётся в .env (METRICS_TOKEN); если он пуст,
+    # оставьте здесь список адресов, откуда ходит сборщик.
+    location = /metrics {
+        # allow 10.0.0.0/8;
+        # deny all;
+
+        try_files $uri /index.php$is_args$args;
+    }
+
     location / {
         try_files $uri /index.php$is_args$args;
     }

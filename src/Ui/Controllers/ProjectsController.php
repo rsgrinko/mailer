@@ -14,6 +14,7 @@ use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\UserRepository;
 use Mailer\Support\Config;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -97,6 +98,7 @@ final class ProjectsController extends ResourceController
             'rate_limit_day'     => (int) $request->input('rate_limit_day', 0),
             'webhook_url'        => trim((string) $request->input('webhook_url', '')),
             'active'             => $request->input('active') !== null,
+            'unsubscribe'        => $request->input('unsubscribe') !== null,
         ];
 
         $secret = trim((string) $request->input('webhook_secret', ''));
@@ -122,11 +124,13 @@ final class ProjectsController extends ResourceController
         try {
             if ($id > 0) {
                 $this->projects->update($id, $data);
+                Audit::updated('project', $id, 'проект «' . $data['name'] . '»');
                 View::flash('Проект сохранён');
             } else {
                 $created = $this->projects->create($data);
                 $id      = (int) $created['project']['id'];
 
+                Audit::created('project', $id, 'проект «' . $data['name'] . '»');
                 View::flash('Проект создан. API-ключ (сохраните, он больше не покажется): ' . $created['key']);
             }
         } catch (Throwable $e) {
@@ -145,16 +149,19 @@ final class ProjectsController extends ResourceController
         switch ($action) {
             case 'key':
                 $key = $this->projects->regenerateKey($id);
+                Audit::action('project', $id, 'выпущен новый API-ключ проекта «' . $project['name'] . '»');
                 View::flash('Новый ключ (старый больше не работает): ' . $key);
                 break;
 
             case 'toggle':
                 $this->projects->update($id, ['active' => (int) $project['active'] !== 1]);
+                Audit::updated('project', $id, ((int) $project['active'] === 1 ? 'отключён' : 'включён') . ' проект «' . $project['name'] . '»');
                 View::flash((int) $project['active'] === 1 ? 'Проект отключён' : 'Проект включён');
                 break;
 
             case 'delete':
                 $this->projects->delete($id);
+                Audit::deleted('project', $id, 'проект «' . $project['name'] . '»');
                 View::flash('Проект удалён. Его письма остались в истории.');
 
                 return Response::redirect(View::route('ui.projects'));

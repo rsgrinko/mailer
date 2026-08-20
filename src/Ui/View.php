@@ -115,6 +115,7 @@ final class View
             'sent'     => 'отправлено',
             'failed'   => 'ошибка',
             'canceled' => 'отменено',
+            'suppressed' => 'в стоп-листе',
             default    => $status,
         };
     }
@@ -162,7 +163,26 @@ final class View
             'requeued' => 'возвращено в очередь',
             'webhook'  => 'вебхук',
             'sender'   => 'отправитель подменён',
+            'suppressed' => 'адрес в стоп-листе',
             default    => $type,
+        };
+    }
+
+    /**
+     * Раздел в журнале действий.
+     */
+    public static function auditEntity(string $entity): string
+    {
+        return match ($entity) {
+            'message'   => 'письмо',
+            'project'   => 'проект',
+            'transport' => 'транспорт',
+            'template'  => 'шаблон',
+            'user'      => 'пользователь',
+            'role'      => 'роль',
+            'webhook'   => 'вебхук',
+            'system'    => 'сервис',
+            default     => $entity,
         };
     }
 

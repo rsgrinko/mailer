@@ -139,7 +139,7 @@ final class SmtpClient
         $this->command('MAIL FROM:<' . $from . '>', [250], 'MAIL FROM');
 
         foreach ($recipients as $recipient) {
-            $this->command('RCPT TO:<' . $recipient . '>', [250, 251], 'RCPT TO ' . $recipient);
+            $this->command('RCPT TO:<' . $recipient . '>', [250, 251], 'RCPT TO ' . $recipient, false, ['recipient' => $recipient]);
         }
 
         $this->command('DATA', [354], 'DATA');
@@ -326,12 +326,12 @@ final class SmtpClient
      *
      * @param array<int, int> $expected
      */
-    private function command(string $command, array $expected, string $what, bool $secret = false): array
+    private function command(string $command, array $expected, string $what, bool $secret = false, array $context = []): array
     {
         [$code, $lines] = $this->request($command, $secret);
 
         if (!in_array($code, $expected, true)) {
-            $this->fail($code, $lines, $what);
+            $this->fail($code, $lines, $what, $context);
         }
 
         return $lines;
@@ -418,17 +418,22 @@ final class SmtpClient
     /**
      * Превращает ответ сервера в исключение. 4xx — временная беда, 5xx — окончательная.
      *
+     * В контекст кладём и сам ответ сервера: по нему отказ на RCPT разбирается дальше —
+     * несуществующий ящик уезжает в стоп-лист, а «relay denied» не должен.
+     *
      * @param array<int, string> $lines
+     * @param array<string, mixed> $extra
      */
-    private function fail(int $code, array $lines, string $what): never
+    private function fail(int $code, array $lines, string $what, array $extra = []): never
     {
         $text = trim(implode(' ', $lines));
         $message = sprintf('SMTP %s: сервер ответил %d %s', $what, $code, $text);
-        $context = [
+        $context = array_merge($extra, [
             'host'         => $this->host,
             'code'         => $code,
+            'answer'       => $text,
             'conversation' => array_slice($this->conversation, -12),
-        ];
+        ]);
 
         $this->close();
 

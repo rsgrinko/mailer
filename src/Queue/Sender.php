@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Mailer\Queue;
 
+use Mailer\Bounce\Unsubscribe;
+use Mailer\Bounce\Verp;
 use Mailer\Message\Message;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\EventRepository;
 use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
+use Mailer\Repository\SuppressionRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\WebhookRepository;
 use Mailer\Storage\Database;
@@ -34,19 +37,21 @@ final class Sender
     private WebhookRepository $webhooks;
     private TransportFactory $factory;
     private RateLimiter $limiter;
+    private SuppressionRepository $suppressions;
     private Logger $logger;
 
     public function __construct(?Database $db = null)
     {
-        $this->db         = $db ?? Database::instance();
-        $this->messages   = new MessageRepository($this->db);
-        $this->events     = new EventRepository($this->db);
-        $this->transports = new TransportRepository($this->db);
-        $this->projects   = new ProjectRepository($this->db);
-        $this->webhooks   = new WebhookRepository($this->db);
-        $this->factory    = new TransportFactory($this->transports);
-        $this->limiter    = new RateLimiter($this->db);
-        $this->logger     = new Logger('sender');
+        $this->db           = $db ?? Database::instance();
+        $this->messages     = new MessageRepository($this->db);
+        $this->events       = new EventRepository($this->db);
+        $this->transports   = new TransportRepository($this->db);
+        $this->projects     = new ProjectRepository($this->db);
+        $this->webhooks     = new WebhookRepository($this->db);
+        $this->factory      = new TransportFactory($this->transports);
+        $this->limiter      = new RateLimiter($this->db);
+        $this->suppressions = new SuppressionRepository($this->db);
+        $this->logger       = new Logger('sender');
     }
 
     /**
@@ -83,7 +88,25 @@ final class Sender
             $this->events->add($id, EventRepository::ATTEMPT, 'Попытка №' . $attempt . ' через «' . $transport->name() . '»');
 
             $message = $this->messages->toMessage($row);
-            $info    = $transport->send($message);
+
+            // Обратный адрес с идентификатором письма: отказ вернётся на ящик сборщика
+            // и сразу привяжется к этому письму
+            $returnPath = Verp::address((string) $row['uuid']);
+            if ($returnPath !== '') {
+                $message->returnPath = $returnPath;
+            }
+
+            // Кнопка «отписаться» в почтовом клиенте. Ставим только письму с одним
+            // получателем: иначе непонятно, кого отписывать по нажатию
+            $recipients = $message->recipients();
+            if (count($recipients) === 1 && Unsubscribe::enabled($project)) {
+                $message->headers = array_merge(
+                    $message->headers,
+                    Unsubscribe::headers($recipients[0], (int) $project['id'])
+                );
+            }
+
+            $info = $transport->send($message);
 
             // Транспорт мог подставить свой адрес вместо указанного в письме
             $sender   = trim((string) ($message->from?->email ?? '')) ?: null;
@@ -219,6 +242,8 @@ final class Sender
             }
 
             $this->queueWebhook($row, 'failed', ['error' => $error, 'attempts' => $attempt]);
+
+            $this->suppressBounced($row, $e);
         });
 
         $this->logger->error('Письмо не отправлено', [
@@ -228,6 +253,53 @@ final class Sender
         ]);
 
         return ['status' => MessageRepository::FAILED, 'info' => $error];
+    }
+
+    /**
+     * Сервер отказал по конкретному ящику — закрываем адрес, чтобы не долбиться в него
+     * каждым следующим письмом.
+     *
+     * Блокируем не любой 5xx: какой ответ считать отказом по ящику, решает
+     * SuppressionRepository::isHardBounce().
+     *
+     * @param array<string, mixed> $row
+     */
+    private function suppressBounced(array $row, TransportException $e): void
+    {
+        if (!(bool) Config::get('suppression.auto_bounce', true) || $e->isTemporary()) {
+            return;
+        }
+
+        $context   = $e->getContext();
+        $recipient = trim((string) ($context['recipient'] ?? ''));
+
+        if ($recipient === '') {
+            return;
+        }
+
+        $answer = (string) ($context['answer'] ?? $e->getMessage());
+        if (!SuppressionRepository::isHardBounce($answer)) {
+            return;
+        }
+
+        $this->suppressions->block($recipient, SuppressionRepository::BOUNCE, 'bounce', [
+            'message_id' => (int) $row['id'],
+            'owner_id'   => (int) ($row['owner_id'] ?? 0),
+            'note'       => $answer,
+        ]);
+
+        $this->events->add(
+            (int) $row['id'],
+            EventRepository::SUPPRESSED,
+            'Адрес ' . $recipient . ' закрыт стоп-листом: сервер получателя ответил отказом',
+            ['recipient' => $recipient, 'answer' => $answer]
+        );
+
+        $this->logger->warning('Адрес добавлен в стоп-лист по отказу сервера', [
+            'recipient' => $recipient,
+            'answer'    => $answer,
+            'uuid'      => $row['uuid'] ?? '',
+        ]);
     }
 
     /**

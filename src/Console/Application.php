@@ -39,6 +39,12 @@ final class Application
             Commands\QueuePurgeCommand::class,
             Commands\WebhookProcessCommand::class,
         ],
+        'Стоп-лист адресов' => [
+            Commands\BouncesFetchCommand::class,
+            Commands\SuppressCommand::class,
+            Commands\SuppressListCommand::class,
+            Commands\SuppressRemoveCommand::class,
+        ],
         'Проекты и ключи' => [
             Commands\KeyCreateCommand::class,
             Commands\KeyListCommand::class,

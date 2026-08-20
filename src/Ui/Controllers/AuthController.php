@@ -12,6 +12,7 @@ use Mailer\Repository\UserRepository;
 use Mailer\Support\Logger;
 use Mailer\Support\MailerException;
 use Mailer\Ui\Auth;
+use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Throwable;
 
@@ -49,6 +50,7 @@ final class AuthController
 
         if ($result['user'] === null) {
             $this->logger->warning('Неудачный вход в панель', ['login' => $login, 'ip' => $request->ip()]);
+            Audit::login(0, $login, false);
 
             return Response::html(View::renderBare('login', [
                 'login' => $login,
@@ -61,6 +63,7 @@ final class AuthController
         Auth::login($user);
         $this->users->touchLogin((int) $user['id'], $request->ip());
         $this->logger->info('Вход в панель', ['login' => $user['login'], 'ip' => $request->ip()]);
+        Audit::login((int) $user['id'], (string) $user['login'], true);
 
         return Response::redirect($next !== '' ? $next : View::route('ui.dashboard'));
     }
@@ -72,6 +75,7 @@ final class AuthController
 
         if ($user !== null) {
             $this->logger->info('Выход из панели', ['login' => $user['login']]);
+            Audit::logout((int) $user['id'], (string) $user['login']);
         }
 
         View::flash('Вы вышли из панели');
@@ -123,6 +127,7 @@ final class AuthController
                 $this->users->setPassword($id, $password);
             }
 
+            Audit::updated('user', $id, 'свой профиль' . ($password !== '' ? ', сменён пароль' : ''));
             View::flash('Профиль сохранён');
         } catch (Throwable $e) {
             View::flash($e->getMessage(), 'error');
@@ -177,6 +182,7 @@ final class AuthController
         Auth::login($user);
         $this->users->touchLogin((int) $user['id'], $request->ip());
         $this->logger->info('Создан первый пользователь панели', ['login' => $user['login']]);
+        Audit::created('user', (int) $user['id'], 'первый пользователь панели «' . $user['login'] . '»');
 
         View::flash('Пользователь «' . $user['login'] . '» создан, вы вошли в панель');
 

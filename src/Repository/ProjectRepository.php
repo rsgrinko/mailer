@@ -36,6 +36,14 @@ final class ProjectRepository
     }
 
     /**
+     * Сколько проектов включено — для метрик и проверки состояния.
+     */
+    public function countActive(): int
+    {
+        return (int) $this->db->value('SELECT COUNT(*) FROM projects WHERE active = 1');
+    }
+
+    /**
      * Страница списка проектов — панели незачем тянуть всё разом.
      *
      * @return array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int}
@@ -146,6 +154,7 @@ final class ProjectRepository
             'webhook_url'        => $data['webhook_url'] ?? null,
             'webhook_secret'     => ($data['webhook_secret'] ?? '') !== '' ? (string) $data['webhook_secret'] : Str::random(32),
             'active'             => (int) (bool) ($data['active'] ?? true),
+            'unsubscribe'        => (int) (bool) ($data['unsubscribe'] ?? false),
             'owner_id'           => (int) ($data['owner_id'] ?? 0),
             'created_at'         => Database::now(),
             'updated_at'         => Database::now(),
@@ -182,8 +191,10 @@ final class ProjectRepository
             }
         }
 
-        if (array_key_exists('active', $data)) {
-            $fields['active'] = (int) (bool) $data['active'];
+        foreach (['active', 'unsubscribe'] as $key) {
+            if (array_key_exists($key, $data)) {
+                $fields[$key] = (int) (bool) $data[$key];
+            }
         }
 
         if (!array_key_exists('owner_id', $data)) {
@@ -252,6 +263,7 @@ final class ProjectRepository
         $row['rate_limit_hour'] = (int) $row['rate_limit_hour'];
         $row['rate_limit_day']  = (int) $row['rate_limit_day'];
         $row['active']          = (int) $row['active'];
+        $row['unsubscribe']     = (int) ($row['unsubscribe'] ?? 0);
         $row['owner_id']        = (int) ($row['owner_id'] ?? 0);
 
         return $row;

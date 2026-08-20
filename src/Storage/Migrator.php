@@ -99,9 +99,103 @@ final class Migrator
             '0004_message_fulltext' => $this->messageFulltext(),
             '0005_message_sender' => $this->messageSender(),
             '0006_access' => $this->accessSchema(),
+            '0007_audit' => $this->auditSchema(),
+            '0008_suppressions' => $this->suppressionsSchema(),
+            '0009_unsubscribe' => $this->unsubscribeSchema(),
         ];
     }
 
+    /**
+     * Отписка одной кнопкой у проекта. Ноль — заголовки отписки в его письма не ставим:
+     * служебному письму про сброс пароля кнопка «отписаться» ни к чему, а массовой
+     * рассылке без неё закроют дорогу Gmail и Mail.ru.
+     *
+     * @return array<int, string>
+     */
+    private function unsubscribeSchema(): array
+    {
+        return [
+            'ALTER TABLE projects ADD COLUMN unsubscribe ' . $this->int() . ' NOT NULL DEFAULT 0',
+        ];
+    }
+
+    /**
+     * Стоп-лист адресов: кому больше не пишем. Сюда попадают отказы почтовых серверов,
+     * жалобы на спам и отписки, а руками — всё остальное.
+     *
+     * `project_id` пустой — адрес закрыт для всех проектов: несуществующего ящика
+     * не существует ни для кого. Заполненный ограничивает запрет одним проектом:
+     * отписка от рассылки одного приложения не должна отменять письма другого.
+     *
+     * `expires_at` — для мягких отказов вроде «ящик переполнен»: через срок адрес
+     * снова разблокируется сам.
+     *
+     * @return array<int, string>
+     */
+    private function suppressionsSchema(): array
+    {
+        $id   = $this->id();
+        $str  = fn (int $length = 191): string => $this->str($length);
+        $text = $this->text();
+        $int  = $this->int();
+        $dt   = $this->dt();
+        $end  = $this->tableSuffix();
+
+        return [
+            "CREATE TABLE IF NOT EXISTS suppressions (
+                id {$id},
+                email {$str(191)} NOT NULL,
+                project_id {$int} NULL,
+                owner_id {$int} NOT NULL DEFAULT 0,
+                reason {$str(32)} NOT NULL,
+                source {$str(32)} NOT NULL,
+                message_id {$int} NULL,
+                note {$text} NULL,
+                expires_at {$dt} NULL,
+                created_at {$dt} NOT NULL,
+                updated_at {$dt} NOT NULL
+            ){$end}",
+            $this->index('idx_suppressions_email', 'suppressions', 'email'),
+            $this->index('idx_suppressions_project', 'suppressions', 'project_id'),
+            $this->index('idx_suppressions_owner', 'suppressions', 'owner_id, created_at'),
+        ];
+    }
+
+    /**
+     * Журнал действий в панели. Кто, что и над какой записью сделал — по логам такое
+     * не восстановить: там нет ни пользователя, ни того, что именно поменялось.
+     *
+     * Логин пишем строкой рядом с id: пользователя могут удалить, а запись в журнале
+     * должна остаться читаемой.
+     *
+     * @return array<int, string>
+     */
+    private function auditSchema(): array
+    {
+        $id   = $this->id();
+        $str  = fn (int $length = 191): string => $this->str($length);
+        $text = $this->text();
+        $int  = $this->int();
+        $dt   = $this->dt();
+        $end  = $this->tableSuffix();
+
+        return [
+            "CREATE TABLE IF NOT EXISTS audit_log (
+                id {$id},
+                user_id {$int} NOT NULL DEFAULT 0,
+                user_login {$str(191)} NULL,
+                action {$str(64)} NOT NULL,
+                entity {$str(64)} NOT NULL,
+                entity_id {$int} NULL,
+                summary {$text} NULL,
+                ip {$str(64)} NULL,
+                created_at {$dt} NOT NULL
+            ){$end}",
+            $this->index('idx_audit_created', 'audit_log', 'created_at'),
+            $this->index('idx_audit_user', 'audit_log', 'user_id, created_at'),
+            $this->index('idx_audit_entity', 'audit_log', 'entity, entity_id'),
+        ];
+    }
     /**
      * Роли и владельцы записей. До неё в панели все были равны и видели всё.
      *
