@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Queue;
 
+use Mailer\Message\Message;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\EventRepository;
 use Mailer\Repository\MessageRepository;
@@ -84,9 +85,12 @@ final class Sender
             $message = $this->messages->toMessage($row);
             $info    = $transport->send($message);
 
+            // Транспорт мог подставить свой адрес вместо указанного в письме
+            $replaced = $this->senderReplaced($row, $message);
+
             // Письмо уже ушло, откатывать нечего — но записать об этом нужно всё разом:
             // статус, событие, отметку транспорта и вебхук
-            $this->db->transaction(function () use ($id, $attempt, $transportRow, $transport, $info, $row): void {
+            $this->db->transaction(function () use ($id, $attempt, $transportRow, $transport, $info, $row, $replaced): void {
                 $this->messages->update($id, [
                     'status'         => MessageRepository::SENT,
                     'attempts'       => $attempt,
@@ -97,6 +101,15 @@ final class Sender
                     'locked_at'      => null,
                     'last_error'     => null,
                 ]);
+
+                if ($replaced !== null) {
+                    $this->events->add(
+                        $id,
+                        EventRepository::SENDER,
+                        'Отправитель заменён транспортом: ' . $replaced['was'] . ' -> ' . $replaced['now'],
+                        $replaced
+                    );
+                }
 
                 $this->events->add($id, EventRepository::SENT, $info);
                 $this->transports->markUsed((int) $transportRow['id'], null);
@@ -117,6 +130,26 @@ final class Sender
             // Любая другая ошибка (например, кривые настройки) — считаем окончательной
             return $this->handleFailure($row, $attempt, TransportException::permanent($e->getMessage(), [], $e), $transportName);
         }
+    }
+
+    /**
+     * Транспорт с force_from подменяет отправителя уже на отправке, в базе остаётся
+     * исходный. Сравниваем адреса и, если они разошлись, отдаём оба — иначе потом
+     * не понять, почему письмо ушло не с того адреса.
+     *
+     * @param array<string, mixed> $row
+     * @return array{was: string, now: string}|null
+     */
+    private function senderReplaced(array $row, Message $message): ?array
+    {
+        $was = trim((string) ($row['from_email'] ?? ''));
+        $now = trim((string) ($message->from?->email ?? ''));
+
+        if ($was === '' || $now === '' || strcasecmp($was, $now) === 0) {
+            return null;
+        }
+
+        return ['was' => $was, 'now' => $now];
     }
 
     /**

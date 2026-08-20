@@ -120,7 +120,10 @@ abstract class BaseTransport implements TransportInterface
             $message->replyTo = $original;
         }
 
-        $message->from         = new Address($email, (string) $this->setting('from_name', ''));
+        // Подменяем только адрес: имя отправителя — часть письма, его не трогаем
+        $name = $original !== null ? $original->name : (string) $this->setting('from_name', '');
+
+        $message->from         = new Address($email, $name);
         $message->envelopeFrom = $email;
 
         return $original !== null;

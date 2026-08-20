@@ -282,6 +282,7 @@ test('транспорт с force_from подменяет отправителя
 
     assertSame('robot@yandex.ru', $message->from->email);
     assertSame('robot@yandex.ru', $message->sender());
+    assertSame('Сайт', $message->from->name, 'имя отправителя меняться не должно');
     assertSame('noreply@ahtori.local', $message->replyTo?->email);
     assertContains('robot@yandex.ru', $mime);
 });
@@ -343,8 +344,12 @@ test('force_from правит отправителя и в готовом пис
     $mime = $transport->send($message);
 
     assertSame('robot@yandex.ru', $message->sender());
-    assertContains('From: robot@yandex.ru', $mime);
+    assertSame('Сайт', $message->from->name);
+    assertContains('robot@yandex.ru', $mime);
     assertContains('Reply-To:', $mime);
-    assertTrue(!str_contains($mime, 'From: Сайт'), 'старый From должен исчезнуть');
+    assertTrue(
+        !str_contains($mime, 'From: Сайт <noreply@ahtori.local>'),
+        'прежний адрес не должен остаться в From'
+    );
     assertContains('тело', $mime);
 });

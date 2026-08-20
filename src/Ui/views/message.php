@@ -14,6 +14,7 @@ declare(strict_types=1);
  * @var array<string, mixed> $templateData
  * @var array<int, array<string, mixed>> $attachments
  * @var array<int, array<string, mixed>> $events
+ * @var array{was: string, now: string}|null $senderUsed
  * @var array<string, mixed>|null $project
  * @var array<string, mixed>|null $transport
  * @var array<int, array<string, mixed>> $webhooks
@@ -78,7 +79,18 @@ $isCanceled = (string) $message['status'] === 'canceled';
         <h2>Свойства</h2>
         <dl class="props">
             <dt>Идентификатор</dt><dd class="mono"><?= View::e((string) $message['uuid']) ?></dd>
-            <dt>От кого</dt><dd><?= View::e(trim((string) ($message['from_name'] ?? '') . ' <' . (string) ($message['from_email'] ?? '') . '>')) ?></dd>
+            <dt>От кого</dt>
+            <dd>
+                <?= View::e(trim((string) ($message['from_name'] ?? '') . ' <' . (string) ($message['from_email'] ?? '') . '>')) ?>
+                <?php if ($senderUsed !== null) { ?>
+                    <div class="small">
+                        <span class="badge sending">адрес подменён</span>
+                        ушло с <span class="mono"><?= View::e($senderUsed['now']) ?></span>
+                    </div>
+                    <div class="muted small">Так настроен транспорт: он шлёт только со своего адреса,
+                        прежний ушёл в Reply-To.</div>
+                <?php } ?>
+            </dd>
             <dt>Кому</dt><dd><?= View::e($addresses($to)) ?></dd>
             <?php if ($cc !== []) { ?><dt>Копия</dt><dd><?= View::e($addresses($cc)) ?></dd><?php } ?>
             <?php if ($bcc !== []) { ?><dt>Скрытая копия</dt><dd><?= View::e($addresses($bcc)) ?></dd><?php } ?>

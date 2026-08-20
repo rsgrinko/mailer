@@ -345,3 +345,56 @@ test('синхронная отправка забирает письмо из �
     // Воркеру после синхронной отправки брать уже нечего
     assertTrue((new Queue())->claimOne($id, 'воркер') === null, 'отправленное письмо захватить нельзя');
 });
+
+test('подмена отправителя транспортом попадает в историю письма', function (): void {
+    $transports = new TransportRepository();
+
+    if ($transports->findByName('test-force-from') === null) {
+        $transports->create([
+            'name'       => 'test-force-from',
+            'type'       => 'null',
+            'settings'   => ['force_from' => true],
+            'from_email' => 'robot@yandex.ru',
+            'from_name'  => 'Робот',
+        ]);
+    }
+
+    $transport = (array) $transports->findByName('test-force-from');
+
+    $service = new MailService();
+    $result  = $service->accept([
+        'from'      => ['email' => 'noreply@ahtori.local', 'name' => 'Сайт'],
+        'to'        => 'user@example.com',
+        'subject'   => 'Подмена отправителя',
+        'text'      => 'Текст письма',
+        'transport' => 'test-force-from',
+    ]);
+
+    $id      = (int) $result['id'];
+    $claimed = (new Queue())->claimOne($id, 'тестовый-воркер');
+    assertTrue($claimed !== null);
+
+    $sent = (new Sender())->send($claimed);
+    assertSame('sent', $sent['status']);
+
+    // В базе остаётся отправитель, которого указал клиент
+    $row = (new MessageRepository())->find($id);
+    assertSame('noreply@ahtori.local', (string) $row['from_email']);
+
+    $types = [];
+    $meta  = [];
+    foreach ((new EventRepository())->forMessage($id) as $event) {
+        $types[] = (string) $event['type'];
+        if ((string) $event['type'] === EventRepository::SENDER) {
+            $meta = (array) $event['meta'];
+        }
+    }
+
+    assertTrue(in_array(EventRepository::SENDER, $types, true), 'должно быть событие о подмене');
+    assertSame('noreply@ahtori.local', (string) ($meta['was'] ?? ''));
+    assertSame('robot@yandex.ru', (string) ($meta['now'] ?? ''));
+
+    // За собой прибираем: письма в очереди ломают соседние тесты
+    (new MessageRepository())->delete($id);
+    $transports->delete((int) $transport['id']);
+});

@@ -19,6 +19,7 @@ final class EventRepository
     public const CANCELED  = 'canceled';
     public const REQUEUED  = 'requeued';
     public const WEBHOOK   = 'webhook';
+    public const SENDER    = 'sender';
 
     private Database $db;
 

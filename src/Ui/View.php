@@ -161,6 +161,7 @@ final class View
             'canceled' => 'отменено',
             'requeued' => 'возвращено в очередь',
             'webhook'  => 'вебхук',
+            'sender'   => 'отправитель подменён',
             default    => $type,
         };
     }

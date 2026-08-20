@@ -118,6 +118,8 @@ final class MessagesController
             $preview['html'] = $parsed['html'];
         }
 
+        $events = $this->events->forMessage($id);
+
         return Response::html(View::render('message', [
             'active'      => 'messages',
             'message'     => $row,
@@ -128,13 +130,41 @@ final class MessagesController
             'meta'        => $this->messages->decodeArray($row['meta'] ?? null),
             'templateData' => $this->messages->decodeArray($row['template_data'] ?? null),
             'attachments' => $this->messages->decodeArray($row['attachments_json'] ?? null),
-            'events'      => $this->events->forMessage($id),
+            'events'      => $events,
+            'senderUsed'  => $this->senderUsed($events),
             'project'     => $row['project_id'] !== null ? $this->projects->find((int) $row['project_id']) : null,
             'transport'   => $row['transport_id'] !== null ? $this->transports->find((int) $row['transport_id']) : null,
             'webhooks'    => $this->webhooks->paginate(['message_id' => $id], 1, 20)['items'],
             'mime'        => $mime,
             'preview'     => $preview,
         ], 'Письмо'));
+    }
+
+    /**
+     * С какого адреса письмо ушло на самом деле: транспорт с force_from подменяет
+     * отправителя на отправке, и в карточке иначе не понять, почему адрес не тот.
+     *
+     * @param array<int, array<string, mixed>> $events
+     * @return array{was: string, now: string}|null
+     */
+    private function senderUsed(array $events): ?array
+    {
+        $replaced = null;
+
+        foreach ($events as $event) {
+            if ((string) $event['type'] !== EventRepository::SENDER) {
+                continue;
+            }
+
+            $meta = (array) ($event['meta'] ?? []);
+            $now  = trim((string) ($meta['now'] ?? ''));
+
+            if ($now !== '') {
+                $replaced = ['was' => trim((string) ($meta['was'] ?? '')), 'now' => $now];
+            }
+        }
+
+        return $replaced;
     }
 
     /**
