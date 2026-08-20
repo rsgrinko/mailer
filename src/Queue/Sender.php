@@ -108,7 +108,7 @@ final class Sender
                     $this->events->add(
                         $id,
                         EventRepository::SENDER,
-                        'Отправитель заменён транспортом: ' . $replaced['was'] . ' -> ' . $replaced['now'],
+                        'Отправитель заменён транспортом: ' . $replaced['was'] . ' → ' . $replaced['now'],
                         $replaced
                     );
                 }

@@ -83,12 +83,10 @@ $isCanceled = (string) $message['status'] === 'canceled';
             <dd>
                 <?= View::e(trim((string) ($message['from_name'] ?? '') . ' <' . (string) ($message['from_email'] ?? '') . '>')) ?>
                 <?php if ($senderUsed !== null) { ?>
-                    <div class="small">
-                        <span class="badge sending">адрес подменён</span>
+                    <div class="small" title="Так настроен транспорт: он шлёт только со своего адреса, прежний ушёл в Reply-To">
+                        <span class="badge sending">подменён</span>
                         ушло с <span class="mono"><?= View::e($senderUsed['now']) ?></span>
                     </div>
-                    <div class="muted small">Так настроен транспорт: он шлёт только со своего адреса,
-                        прежний ушёл в Reply-To.</div>
                 <?php } ?>
             </dd>
             <dt>Кому</dt><dd><?= View::e($addresses($to)) ?></dd>
