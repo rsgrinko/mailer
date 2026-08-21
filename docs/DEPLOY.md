@@ -30,6 +30,7 @@ APP_ENV=production
 APP_DEBUG=false
 APP_KEY=base64:...
 APP_HOSTNAME=example.com        # домен для Message-ID
+APP_URL=https://mail.example.com # внешний адрес: из него собираются ссылки отписки
 LOG_LEVEL=info
 LOG_SMTP=false
 ```

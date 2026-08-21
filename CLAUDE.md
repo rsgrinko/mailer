@@ -74,6 +74,8 @@ src/                 ядро сервиса, namespace Mailer\
   Http/              Router, Route, Request, Response, Kernel, Middleware/, Controllers/ (API)
   Ui/                контроллеры, прослойки и вьюхи веб-панели мониторинга
   Smtpd/             SmtpServer — локальный SMTP-релей для приложений без SDK
+  Bounce/            Collector — разбор ящика отказов (Pop3Client, DsnParser, Verp),
+                     Unsubscribe — заголовки и токены отписки одной кнопкой
   Console/           Application (реестр и справка) + Command + Commands/ (по классу на команду)
 routes/              карта адресов: api.php и ui.php (маршруты, группы, прослойки)
 public/index.php     единая точка входа: /api/v1/... и /ui/..., корень уводит на панель
@@ -151,6 +153,11 @@ var/                 runtime: SQLite-база, логи, spool вложений,
   осталось ни одного получателя, письмо сохраняется со статусом `suppressed`.
   Адрес закрывается сам, когда сервер получателя ответил отказом по ящику —
   что считать таким отказом, решает `SuppressionRepository::isHardBounce()`.
+  Отложенный отказ (сервер принял письмо, а отчёт о недоставке прислал потом) ловит
+  `Bounce\Collector`: читает ящик по POP3, разбирает отчёт и закрывает адрес. Ящик
+  задаётся настройками `BOUNCE_*`, воркер заглядывает в него сам раз в `BOUNCE_INTERVAL`.
+  С `BOUNCE_VERP=true` письмо уходит с обратным адресом `bounce+<uuid>@домен`, и отказ
+  привязывается к письму сразу; без VERP письмо ищется по `Message-ID` из оригинала.
 - `audit_log` — журнал действий панели: кто (id и логин строкой — пользователя могут
   удалить), что сделал (`created|updated|deleted|action|login|logout`), над каким разделом
   и какой записью, описание для человека, адрес и время. Пишется помощником
@@ -207,6 +214,12 @@ claim). По умолчанию — SQLite (`var/mailer.sqlite`), MySQL вклю
 текст в формате Prometheus. Ключ проекта там не нужен, доступ закрывает прослойка
 `metrics-token` (`METRICS_TOKEN` в `.env`; пустой токен оставляет адрес открытым,
 `METRICS_ENABLED=false` убирает его совсем). Все значения — gauge, они читаются из базы.
+
+Там же живёт отписка одной кнопкой: `GET|POST /unsubscribe/{токен}` — адрес публичный,
+ни ключа, ни сессии, всё решает подпись токена (`Bounce\Unsubscribe`, ключ `APP_KEY`).
+GET показывает страницу с кнопкой, отписывает только POST: почтовые клиенты открывают
+ссылки ради превью. Заголовки `List-Unsubscribe` ставятся письму с одним получателем,
+если включён `UNSUBSCRIBE_ENABLED`, задан `APP_URL` и у проекта стоит флаг `unsubscribe`.
 
 ## 7. Веб-панель
 
@@ -304,6 +317,7 @@ php bin/mailer role:list [название]  роли панели и их пр�
 php bin/mailer transport:add|transport:list|transport:test|transport:default
                                      (--owner=логин, --shared — общий транспорт)
 php bin/mailer suppress:add|suppress:list|suppress:remove   стоп-лист адресов
+php bin/mailer bounces:fetch [--limit=]   разобрать ящик отказов
 php bin/mailer queue:status|queue:retry|queue:purge
 php bin/mailer send:test <email>     тестовое письмо
 php bin/mailer route:list [строка]   карта адресов: адрес, обработчик, прослойки, имя

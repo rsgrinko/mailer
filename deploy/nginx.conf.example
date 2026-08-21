@@ -46,6 +46,12 @@ server {
         try_files $uri /index.php$is_args$args;
     }
 
+    # Отписка по ссылке из письма. Сюда ходят получатели писем и их почтовые
+    # клиенты, поэтому адрес открытый: доступ решает подпись в самой ссылке.
+    location /unsubscribe/ {
+        try_files $uri /index.php$is_args$args;
+    }
+
     location / {
         try_files $uri /index.php$is_args$args;
     }
