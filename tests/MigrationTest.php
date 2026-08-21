@@ -122,17 +122,11 @@ test('занятая блокировка не пускает второй на�
 });
 
 test('блокировка в MySQL общая для всех соединений', function (): void {
-    if (Mailer\Support\Env::string('DB_DRIVER', 'sqlite') !== 'mysql') {
-        skipTest('проверка только для MySQL (DB_DRIVER=mysql в .env)');
-    }
+    $config = testMysqlConfig();
 
-    $config = [
-        'host'     => Mailer\Support\Env::string('DB_HOST', '127.0.0.1'),
-        'port'     => Mailer\Support\Env::int('DB_PORT', 3306),
-        'database' => Mailer\Support\Env::string('DB_DATABASE', 'mailer'),
-        'username' => Mailer\Support\Env::string('DB_USERNAME', ''),
-        'password' => Mailer\Support\Env::string('DB_PASSWORD', ''),
-    ];
+    if ($config === null) {
+        skipTest('нужна отдельная база MySQL для тестов (TEST_DB_* в .env)');
+    }
 
     // Разные подключения — как разные процессы: воркер, панель, консоль
     $one = new Database(['driver' => 'mysql', 'mysql' => $config]);

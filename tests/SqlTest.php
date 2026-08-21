@@ -79,18 +79,13 @@ test('постраничная выборка считает записи и н�
 });
 
 test('оборванное соединение с MySQL поднимается заново', function (): void {
-    // Тесты идут на sqlite в памяти, поэтому подключение к MySQL собираем сами из .env
-    if (Mailer\Support\Env::string('DB_DRIVER', 'sqlite') !== 'mysql') {
-        skipTest('проверка только для MySQL (DB_DRIVER=mysql в .env)');
-    }
+    // По умолчанию тесты идут на sqlite в памяти, поэтому подключение собираем сами.
+    // Боевая база из DB_* здесь не годится — только своя из TEST_DB_*
+    $config = testMysqlConfig();
 
-    $config = [
-        'host'     => Mailer\Support\Env::string('DB_HOST', '127.0.0.1'),
-        'port'     => Mailer\Support\Env::int('DB_PORT', 3306),
-        'database' => Mailer\Support\Env::string('DB_DATABASE', 'mailer'),
-        'username' => Mailer\Support\Env::string('DB_USERNAME', ''),
-        'password' => Mailer\Support\Env::string('DB_PASSWORD', ''),
-    ];
+    if ($config === null) {
+        skipTest('нужна отдельная база MySQL для тестов (TEST_DB_* в .env)');
+    }
 
     $db = new Mailer\Storage\Database(['driver' => 'mysql', 'mysql' => $config]);
     $id = (int) $db->value('SELECT CONNECTION_ID()');

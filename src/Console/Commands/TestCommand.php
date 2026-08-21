@@ -23,12 +23,11 @@ final class TestCommand extends Command
 
     public function usage(): string
     {
-        return 'test';
+        return 'test [--filter=] [--stop-on-failure] [--shuffle]';
     }
 
     public function run(): int
     {
-
         $runner = MAILER_ROOT . '/tests/run.php';
 
         if (!is_file($runner)) {
@@ -37,7 +36,10 @@ final class TestCommand extends Command
             return 1;
         }
 
+        // Раннер запускают и напрямую (php tests/run.php), поэтому опции он читает
+        // из глобальной переменной, а своего разбора аргументов не имеет
+        $GLOBALS['test_options'] = $this->options;
+
         return (int) require $runner;
-    
     }
 }
