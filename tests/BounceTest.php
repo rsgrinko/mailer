@@ -150,3 +150,177 @@ test('без настроек ящика сборщик не запускает�
 
     Config::set('bounce.enabled', false);
 });
+
+/**
+ * Поднимает игрушечный POP3 с готовыми письмами в ящике.
+ *
+ * @param  array<int, string> $messages
+ * @return array{port: int, log: string, box: string, process: resource, pipes: array<int, resource>}
+ */
+function startPop3Stub(array $messages, bool $badPassword = false): array
+{
+    if (!function_exists('proc_open')) {
+        skipTest('proc_open выключен');
+    }
+
+    $log = (string) tempnam(sys_get_temp_dir(), 'pop3-log-');
+    $box = (string) tempnam(sys_get_temp_dir(), 'pop3-box-');
+
+    file_put_contents($box, implode("\n%%\n", $messages));
+
+    $command = [PHP_BINARY, MAILER_ROOT . '/tests/pop3-stub.php', $log, '--messages=' . $box];
+
+    if ($badPassword) {
+        $command[] = '--bad-password';
+    }
+
+    $pipes   = [];
+    $process = @proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+
+    if (!is_resource($process)) {
+        @unlink($log);
+        @unlink($box);
+        skipTest('не удалось запустить заглушку POP3');
+    }
+
+    $port = (int) trim((string) fgets($pipes[1]));
+
+    if ($port <= 0) {
+        @proc_terminate($process);
+        skipTest('заглушка POP3 не заняла порт');
+    }
+
+    return ['port' => $port, 'log' => $log, 'box' => $box, 'process' => $process, 'pipes' => $pipes];
+}
+
+/**
+ * @param array{port: int, log: string, box: string, process: resource, pipes: array<int, resource>} $stub
+ */
+function stopPop3Stub(array $stub): string
+{
+    $log = is_file($stub['log']) ? (string) file_get_contents($stub['log']) : '';
+
+    foreach ($stub['pipes'] as $pipe) {
+        @fclose($pipe);
+    }
+
+    @proc_terminate($stub['process']);
+    @proc_close($stub['process']);
+    @unlink($stub['log']);
+    @unlink($stub['box']);
+
+    return $log;
+}
+
+/**
+ * Настройки ящика отказов, указывающие на заглушку.
+ *
+ * @return array<string, mixed>
+ */
+function bounceMailbox(int $port): array
+{
+    return [
+        'bounce.enabled'    => true,
+        'bounce.host'       => '127.0.0.1',
+        'bounce.port'       => $port,
+        'bounce.encryption' => 'none',
+        'bounce.username'   => 'bounce@example.com',
+        'bounce.password'   => 'секрет',
+        'bounce.delete'     => true,
+    ];
+}
+
+test('сборщик забирает отказы из ящика и закрывает адреса', function (): void {
+    $stub = startPop3Stub([
+        bounceReport('pop3-otkaz@example.com', '5.1.1', 'failed', '550 5.1.1 User unknown'),
+        bounceReport('pop3-zaderzhka@example.com', '4.2.2', 'delayed', '452 Mailbox full'),
+    ]);
+
+    try {
+        $result = withConfig(bounceMailbox($stub['port']), static function (): array {
+            assertTrue(Collector::enabled(), 'с настройками ящика сборщик должен включаться');
+
+            return (new Collector())->run();
+        });
+
+        assertSame(2, $result['fetched'], 'из ящика должны прийти оба письма');
+        assertSame(1, $result['suppressed'], 'закрыть надо только окончательный отказ');
+        assertSame(1, $result['skipped'], 'временная задержка адрес не закрывает');
+
+        $list = new SuppressionRepository();
+
+        assertTrue($list->isBlocked('pop3-otkaz@example.com'), 'адрес окончательного отказа должен закрыться');
+        assertFalse($list->isBlocked('pop3-zaderzhka@example.com'), 'задержка адрес не закрывает');
+
+        $log = stopPop3Stub($stub);
+
+        assertContains('USER bounce@example.com', $log, 'клиент должен представиться');
+        assertContains('PASS ***', $log, 'пароль должен уйти отдельной командой');
+        assertContains('RETR 1', $log, 'письмо должно быть скачано');
+        assertContains('DELE 1', $log, 'разобранное письмо удаляется из ящика');
+        assertContains('QUIT', $log, 'сессия должна закрываться по-человечески');
+
+        $stub = null;
+
+        $row = (array) Mailer\Storage\Database::instance()->selectOne(
+            'SELECT id FROM suppressions WHERE email = :email',
+            ['email' => 'pop3-otkaz@example.com']
+        );
+        $list->delete((int) $row['id']);
+    } finally {
+        if ($stub !== null) {
+            stopPop3Stub($stub);
+        }
+    }
+});
+
+test('с bounce.delete=false письма в ящике остаются', function (): void {
+    $stub = startPop3Stub([
+        bounceReport('pop3-ostanetsya@example.com', '5.1.1', 'failed', '550 5.1.1 User unknown'),
+    ]);
+
+    try {
+        $settings = bounceMailbox($stub['port']);
+        $settings['bounce.delete'] = false;
+
+        withConfig($settings, static function (): void {
+            (new Collector())->run();
+        });
+
+        $log = stopPop3Stub($stub);
+        $stub = null;
+
+        assertContains('RETR 1', $log);
+        assertNotContains('DELE', $log, 'с выключенным удалением письма трогать нельзя');
+
+        $list = new SuppressionRepository();
+        $row  = (array) Mailer\Storage\Database::instance()->selectOne(
+            'SELECT id FROM suppressions WHERE email = :email',
+            ['email' => 'pop3-ostanetsya@example.com']
+        );
+        $list->delete((int) $row['id']);
+    } finally {
+        if ($stub !== null) {
+            stopPop3Stub($stub);
+        }
+    }
+});
+
+test('неверный пароль от ящика — понятная ошибка, а не молчание', function (): void {
+    $stub = startPop3Stub([bounceReport('pop3-nikto@example.com', '5.1.1', 'failed', '550 User unknown')], true);
+
+    try {
+        $error = withConfig(bounceMailbox($stub['port']), static function () {
+            return assertThrows(static fn () => (new Collector())->run(), 'отказ во входе должен быть виден');
+        });
+
+        assertContains('Ящик отказов ответил отказом', $error->getMessage());
+        assertContains('неверный пароль', $error->getMessage(), 'ответ сервера должен быть виден целиком');
+        assertFalse(
+            (new SuppressionRepository())->isBlocked('pop3-nikto@example.com'),
+            'без входа в ящик адреса закрывать нечем'
+        );
+    } finally {
+        stopPop3Stub($stub);
+    }
+});

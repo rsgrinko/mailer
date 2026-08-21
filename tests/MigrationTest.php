@@ -121,27 +121,47 @@ test('занятая блокировка не пускает второй на�
     $second->release();
 });
 
-test('блокировка в MySQL общая для всех соединений', function (): void {
-    skipTest('работа с MySQL заглушена до исправления функционала тестов');
-    $config = testMysqlConfig();
-
-    if ($config === null) {
-        skipTest('нужна отдельная база MySQL для тестов (TEST_DB_* в .env)');
+test('блокировка держится между процессами', function (): void {
+    if (!function_exists('proc_open')) {
+        skipTest('proc_open выключен');
     }
 
-    // Разные подключения — как разные процессы: воркер, панель, консоль
-    $one = new Database(['driver' => 'mysql', 'mysql' => $config]);
-    $two = new Database(['driver' => 'mysql', 'mysql' => $config]);
+    // В SQLite блокировка — это flock на файле в var/lock, и проверить её можно
+    // только вторым процессом: внутри одного PHP держит её сам за себя.
+    // MySQL с его GET_LOCK тестами не проверяется — они идут на SQLite.
+    $marker  = (string) tempnam(sys_get_temp_dir(), 'lock-held-');
+    $command = [PHP_BINARY, MAILER_ROOT . '/tests/lock-stub.php', 'mailer_test_lock', $marker];
 
-    $first  = new Mailer\Storage\Lock($one, 'mailer_test_lock');
-    $second = new Mailer\Storage\Lock($two, 'mailer_test_lock');
+    $pipes   = [];
+    $process = @proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
 
-    assertTrue($first->acquire(1), 'первая блокировка не взялась');
-    assertFalse($second->acquire(1), 'вторая блокировка взялась поверх первой');
+    if (!is_resource($process)) {
+        @unlink($marker);
+        skipTest('не удалось запустить второй процесс');
+    }
 
-    $first->release();
-    assertTrue($second->acquire(1), 'после освобождения блокировка должна браться');
-    $second->release();
+    // Первая строка печатается, когда блокировка уже взята
+    $ready = trim((string) fgets($pipes[1]));
+
+    assertSame('held', $ready, 'второй процесс не взял блокировку');
+
+    $lock = new Mailer\Storage\Lock(migrationTestDb(), 'mailer_test_lock');
+    assertFalse($lock->acquire(1), 'блокировку взяли поверх чужой');
+
+    // Убираем метку — процесс отпускает блокировку и выходит
+    @unlink($marker);
+    $left = trim((string) fgets($pipes[1]));
+
+    assertSame('released', $left, 'второй процесс не отпустил блокировку');
+
+    foreach ($pipes as $pipe) {
+        @fclose($pipe);
+    }
+
+    @proc_close($process);
+
+    assertTrue($lock->acquire(2), 'после освобождения блокировка должна браться');
+    $lock->release();
 });
 
 test('докат не переносит вебхуки проектов по второму разу', function (): void {

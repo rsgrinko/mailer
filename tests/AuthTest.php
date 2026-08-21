@@ -36,13 +36,19 @@ test('пользователь заводится и входит по логи�
 });
 
 test('отключённый пользователь войти не может', function (): void {
-    $users = new UserRepository();
-    $users->create(['login' => 'petr', 'password' => 'parol123']);
-    $petr = (array) $users->findByLogin('petr');
+    // Своя база: отключить последнего активного пользователя нельзя, а сколько их
+    // в общей базе — зависит от того, какие тесты успели пройти раньше
+    withOwnDatabase(static function (): void {
+        $users = new UserRepository();
+        $users->create(['login' => 'ostalsya', 'password' => 'parol123']);
+        $users->create(['login' => 'petr', 'password' => 'parol123']);
 
-    $users->update((int) $petr['id'], ['active' => false]);
+        $petr = (array) $users->findByLogin('petr');
+        $users->update((int) $petr['id'], ['active' => false]);
 
-    assertSame(null, $users->verify('petr', 'parol123'));
+        assertSame(null, $users->verify('petr', 'parol123'), 'отключённого пускать нельзя');
+        assertNotNull($users->verify('ostalsya', 'parol123'), 'активный входит по-прежнему');
+    });
 });
 
 test('логин проверяется на допустимые символы и повторы', function (): void {
@@ -58,18 +64,26 @@ test('логин проверяется на допустимые символы
 });
 
 test('последнего активного пользователя не отключить и не удалить', function (): void {
-    $users = new UserRepository();
+    // Тест сносит всех пользователей, поэтому идёт на своей базе: на общей он
+    // оставлял бы соседей без их пользователей и зависел бы от порядка запуска
+    withOwnDatabase(static function (): void {
+        $users = new UserRepository();
 
-    // Оставляем в базе ровно одного — остальных сносим принудительно
-    foreach ($users->all() as $user) {
-        $users->delete((int) $user['id'], true);
-    }
+        $users->create(['login' => 'single', 'password' => 'parol123']);
+        $single = (array) $users->findByLogin('single');
 
-    $users->create(['login' => 'single', 'password' => 'parol123']);
-    $single = (array) $users->findByLogin('single');
+        assertSame(1, $users->countActive(), 'в своей базе должен быть ровно один пользователь');
 
-    assertThrows(static fn () => $users->update((int) $single['id'], ['active' => false]));
-    assertThrows(static fn () => $users->delete((int) $single['id']));
+        assertThrows(static fn () => $users->update((int) $single['id'], ['active' => false]));
+        assertThrows(static fn () => $users->delete((int) $single['id']));
 
-    assertSame(1, $users->countActive());
+        // А когда есть второй — первого можно и отключить, и удалить
+        $users->create(['login' => 'vtoroy', 'password' => 'parol123']);
+
+        $users->update((int) $single['id'], ['active' => false]);
+        assertSame(1, $users->countActive(), 'активным остался второй');
+
+        $users->delete((int) $single['id']);
+        assertNull($users->find((int) $single['id']), 'при живом втором первого можно удалить');
+    });
 });

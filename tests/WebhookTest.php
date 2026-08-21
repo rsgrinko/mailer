@@ -294,16 +294,20 @@ test('проверка связи уходит без письма и возвр
 });
 
 test('секрет подписки лежит в базе зашифрованным', function (): void {
-    Config::set('app.key', Crypto::generateKey());
+    withConfig(['app.key' => Crypto::generateKey()], static function (): void {
+        $id  = webhookSubscription(['secret' => 'очень-секретно']);
+        $row = Database::instance()->selectOne('SELECT secret FROM project_webhooks WHERE id = :id', ['id' => $id]);
 
-    $id  = webhookSubscription(['secret' => 'очень-секретно']);
-    $row = Database::instance()->selectOne('SELECT secret FROM project_webhooks WHERE id = :id', ['id' => $id]);
-
-    assertNotContains('очень-секретно', (string) $row['secret'], 'секрет не должен лежать открытым');
-    assertSame('очень-секретно', WebhookSubscriptionRepository::secret((array) (new WebhookSubscriptionRepository())->find($id)));
+        assertNotContains('очень-секретно', (string) $row['secret'], 'секрет не должен лежать открытым');
+        assertSame(
+            'очень-секретно',
+            WebhookSubscriptionRepository::secret((array) (new WebhookSubscriptionRepository())->find($id))
+        );
+    });
 });
 
-test('прибираем за собой вебхуки проверок', function (): void {
+// Уборка после прогона, а не отдельным тестом: иначе она зависит от порядка
+afterTests(static function (): void {
     $ids  = webhookFixtures();
     $repo = new WebhookSubscriptionRepository();
     $db   = Database::instance();
@@ -313,5 +317,4 @@ test('прибираем за собой вебхуки проверок', funct
         $repo->delete((int) $subscription['id']);
     }
 
-    assertSame(0, count($repo->forProject((int) $ids['project']['id'])));
 });

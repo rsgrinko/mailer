@@ -131,6 +131,60 @@ function afterTests(callable $callback): void
 }
 
 /**
+ * Выполнить тест на своей чистой базе — со схемой, но без чужих записей.
+ *
+ * Нужно там, где тест хозяйничает: сносит всех пользователей, разгребает очередь
+ * до дна. На общей базе такой тест зависит от соседей и мешает им — здесь же
+ * никого нет. Прежнее подключение возвращается в любом случае.
+ */
+function withOwnDatabase(callable $body): mixed
+{
+    $own = new Database(['driver' => 'sqlite', 'sqlite' => ['path' => ':memory:']]);
+
+    $previous = Database::instance();
+    Database::setInstance($own);
+
+    // Контейнер держит собранные репозитории, а они запомнили прежнее подключение
+    Mailer\Support\Container::setInstance(null);
+
+    try {
+        (new Migrator($own))->run();
+
+        return $body($own);
+    } finally {
+        Database::setInstance($previous);
+        Mailer\Support\Container::setInstance(null);
+    }
+}
+
+/**
+ * Выполнить кусок теста с временными настройками.
+ *
+ * Настройки общие на весь прогон, поэтому подменять их «на время» руками нельзя:
+ * упавшая проверка оставит чужой APP_KEY или выключенную авторизацию следующим
+ * тестам. Здесь прежние значения возвращаются в любом случае.
+ *
+ * @param array<string, mixed> $values
+ */
+function withConfig(array $values, callable $body): mixed
+{
+    $previous = [];
+
+    foreach ($values as $key => $value) {
+        $previous[$key] = Config::get($key);
+        Config::set($key, $value);
+    }
+
+    try {
+        return $body();
+    } finally {
+        foreach ($previous as $key => $value) {
+            Config::set($key, $value);
+        }
+    }
+}
+
+/**
  * Ошибка проверки.
  */
 class TestFailure extends RuntimeException

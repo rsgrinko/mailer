@@ -76,3 +76,10 @@ jobs:
       - name: Тесты
         shell: bash
         run: php bin/mailer test
+
+      # Второй прогон в случайном порядке: ловит тесты, которые держатся на соседях
+      # (общая база на весь прогон). Упал только он — смотрите напечатанный seed
+      # и повторяйте локально: php bin/mailer test --shuffle=<seed>
+      - name: Тесты в случайном порядке
+        shell: bash
+        run: php bin/mailer test --shuffle

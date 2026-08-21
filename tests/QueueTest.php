@@ -47,9 +47,11 @@ test('письмо проходит путь от приёма до отправ
 
     $service = new MailService();
     $result  = $service->accept([
-        'to'      => 'user@example.com',
-        'subject' => 'Проверка очереди',
-        'text'    => 'Текст письма',
+        'to'        => 'user@example.com',
+        'subject'   => 'Проверка очереди',
+        'text'      => 'Текст письма',
+        // Транспорт указываем прямо: транспорт по умолчанию соседние тесты меняют
+        'transport' => 'test-null',
     ]);
 
     assertSame('queued', $result['status']);
@@ -60,11 +62,20 @@ test('письмо проходит путь от приёма до отправ
     assertTrue($row !== null);
     assertSame('queued', (string) $row['status']);
 
-    // Забираем письмо как воркер и отправляем
+    // Забираем письмо как воркер и отправляем. В очереди могут лежать письма
+    // соседних тестов, поэтому среди захваченных ищем своё
     $claimed = (new Queue())->claim(10, 'тестовый-воркер');
-    assertTrue($claimed !== []);
+    $mine    = null;
 
-    $sent = (new Sender())->send($claimed[0]);
+    foreach ($claimed as $candidate) {
+        if ((int) $candidate['id'] === (int) $result['id']) {
+            $mine = $candidate;
+        }
+    }
+
+    assertNotNull($mine, 'воркер должен был захватить наше письмо');
+
+    $sent = (new Sender())->send($mine);
     assertSame('sent', $sent['status']);
 
     $row = $messages->find((int) $result['id']);

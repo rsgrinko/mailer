@@ -15,15 +15,30 @@ use Mailer\Ui\UiKernel;
 test('действие панели попадает в журнал и находится фильтрами', function (): void {
     $audit = new AuditRepository();
 
-    $first  = $audit->log(7, 'ivan', AuditRepository::CREATED, 'project', 42, 'проект «журнал-тест»', '10.0.0.1');
-    $second = $audit->log(8, 'petr', AuditRepository::DELETED, 'template', 43, 'шаблон «журнал-тест-2»', '10.0.0.2');
+    // Номера пользователей заведомо чужие: с обычными 1-2-3 в фильтр попали бы
+    // записи соседних тестов
+    $first  = $audit->log(770001, 'ivan', AuditRepository::CREATED, 'project', 42, 'проект «журнал-тест»', '10.0.0.1');
+    $second = $audit->log(770002, 'petr', AuditRepository::DELETED, 'template', 43, 'шаблон «журнал-тест-2»', '10.0.0.2');
 
-    $byUser = $audit->paginate(['user_id' => 7]);
+    $byUser = $audit->paginate(['user_id' => 770001]);
     assertSame(1, $byUser['total'], 'по пользователю должна найтись одна запись');
     assertSame('project', (string) $byUser['items'][0]['entity']);
 
+    // Журнал общий на все тесты, поэтому по разделу и действию проверяем не число
+    // записей, а что наша среди них нашлась и чужие в фильтр не пролезли
     $byEntity = $audit->paginate(['entity' => 'template', 'action' => AuditRepository::DELETED]);
-    assertSame(1, $byEntity['total'], 'по разделу и действию — одна запись');
+    assertTrue($byEntity['total'] >= 1, 'по разделу и действию запись не нашлась');
+
+    $found = false;
+
+    foreach ($byEntity['items'] as $item) {
+        assertSame('template', (string) $item['entity'], 'в выдачу попал чужой раздел');
+        assertSame(AuditRepository::DELETED, (string) $item['action'], 'в выдачу попало чужое действие');
+
+        $found = $found || (int) $item['id'] === $second;
+    }
+
+    assertTrue($found, 'своя запись должна быть в выдаче');
 
     $bySearch = $audit->paginate(['search' => 'журнал-тест-2']);
     assertSame(1, $bySearch['total'], 'поиск идёт по описанию');

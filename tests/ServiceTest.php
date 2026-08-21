@@ -128,12 +128,14 @@ test('проект находится по своему ключу', function ()
 });
 
 test('шифрование настроек возвращает исходное значение', function (): void {
-    Config::set('app.key', Crypto::generateKey());
+    // Ключ подменяется только на время теста: с чужим ключом соседние тесты
+    // не расшифруют уже сохранённые настройки транспортов
+    withConfig(['app.key' => Crypto::generateKey()], static function (): void {
+        $encrypted = Crypto::encrypt('секретный-пароль');
 
-    $encrypted = Crypto::encrypt('секретный-пароль');
-
-    assertNotContains('секретный-пароль', $encrypted);
-    assertSame('секретный-пароль', Crypto::decrypt($encrypted));
+        assertNotContains('секретный-пароль', $encrypted);
+        assertSame('секретный-пароль', Crypto::decrypt($encrypted));
+    });
 });
 
 test('DKIM-подпись добавляется в письмо', function (): void {

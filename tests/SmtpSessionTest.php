@@ -20,9 +20,10 @@ use Mailer\Transport\SmtpTransport;
 /**
  * Поднимает заглушку SMTP отдельным процессом.
  *
+ * @param  string $auth пустая строка — сервер без авторизации, иначе LOGIN или PLAIN
  * @return array{port: int, log: string, process: resource, pipes: array<int, resource>}
  */
-function startSmtpStub(int $dropAfter = 0): array
+function startSmtpStub(int $dropAfter = 0, string $auth = ''): array
 {
     if (!function_exists('proc_open')) {
         skipTest('proc_open выключен');
@@ -33,6 +34,10 @@ function startSmtpStub(int $dropAfter = 0): array
 
     if ($dropAfter > 0) {
         $command[] = '--drop-after=' . $dropAfter;
+    }
+
+    if ($auth !== '') {
+        $command[] = '--auth=' . $auth;
     }
 
     $pipes   = [];
@@ -233,4 +238,95 @@ test('воркер шлёт очередь через одно соединен�
 
     assertSame(1, stubCount($log, 'connect'), 'на всю пачку одно соединение');
     assertSame(3, stubCount($log, 'DATA'), 'ушли все три письма');
+});
+
+test('транспорт входит по AUTH LOGIN, когда сервер его объявил', function (): void {
+    $stub = startSmtpStub(0, 'LOGIN');
+
+    try {
+        $transport = stubTransport($stub['port'], [
+            'username' => 'stub-user',
+            'password' => 'stub-password',
+        ]);
+
+        $transport->send(stubMessage('Письмо с авторизацией'));
+        $transport->close();
+
+        $log = stopSmtpStub($stub);
+        $stub = null;
+
+        assertContains('AUTH LOGIN', $log, 'способ авторизации выбирается по ответу сервера');
+        assertContains('login ' . base64_encode('stub-user'), $log, 'логин уходит в base64');
+        assertNotContains('stub-password', $log, 'пароль не должен светиться открытым текстом');
+        assertContains('MAIL FROM', $log, 'после входа письмо должно уйти');
+    } finally {
+        if ($stub !== null) {
+            stopSmtpStub($stub);
+        }
+    }
+});
+
+test('транспорт умеет AUTH PLAIN', function (): void {
+    $stub = startSmtpStub(0, 'PLAIN');
+
+    try {
+        $transport = stubTransport($stub['port'], [
+            'username' => 'stub-user',
+            'password' => 'stub-password',
+        ]);
+
+        $transport->send(stubMessage('Письмо через PLAIN'));
+        $transport->close();
+
+        $log = stopSmtpStub($stub);
+        $stub = null;
+
+        assertContains('AUTH PLAIN', $log);
+        assertContains('MAIL FROM', $log, 'после входа письмо должно уйти');
+    } finally {
+        if ($stub !== null) {
+            stopSmtpStub($stub);
+        }
+    }
+});
+
+test('неверный пароль SMTP — постоянная ошибка, письмо в повтор не идёт', function (): void {
+    $stub = startSmtpStub(0, 'LOGIN');
+
+    try {
+        $transport = stubTransport($stub['port'], [
+            'username' => 'stub-user',
+            'password' => 'не-тот-пароль',
+        ]);
+
+        $error = assertThrows(static fn () => $transport->send(stubMessage('Не уйдёт')));
+
+        assertTrue($error instanceof Mailer\Transport\TransportException);
+        assertFalse($error->isTemporary(), 'пароль сам не исправится, повторять бессмысленно');
+        assertContains('535', $error->getMessage(), 'в ошибке должен быть ответ сервера');
+
+        $transport->close();
+    } finally {
+        stopSmtpStub($stub);
+    }
+});
+
+test('без логина транспорт не авторизуется вовсе', function (): void {
+    $stub = startSmtpStub();
+
+    try {
+        $transport = stubTransport($stub['port']);
+
+        $transport->send(stubMessage('Письмо без авторизации'));
+        $transport->close();
+
+        $log = stopSmtpStub($stub);
+        $stub = null;
+
+        assertNotContains('AUTH', $log, 'серверу без авторизации команду AUTH слать незачем');
+    } finally {
+        if ($stub !== null) {
+            stopSmtpStub($stub);
+        }
+    }
 });

@@ -566,7 +566,9 @@ test('ключ проекта не достаёт чужих шаблонов и
     }
 });
 
-test('прибираем за собой данные проверок прав', function (): void {
+// Уборка идёт после всего прогона, а не отдельным тестом: тестом она зависела бы
+// от порядка запуска и могла унести фикстуры из-под соседей
+afterTests(static function (): void {
     $ids = accessFixtures();
 
     (new MessageRepository())->delete($ids['message']);
@@ -588,6 +590,4 @@ test('прибираем за собой данные проверок прав'
 
     Config::set('ui.auth', false);
     accessLogout();
-
-    assertSame(null, (new MessageRepository())->find($ids['message']));
 });

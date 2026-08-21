@@ -48,6 +48,9 @@ function unsubscribeFixtures(): array
  */
 function unsubscribeOn(): void
 {
+    // Запоминаем настоящий ключ до первой подмены — вернёт его unsubscribeOff()
+    unsubscribeOriginalKey();
+
     Config::set('app.url', 'https://mail.example.com');
     Config::set('app.key', 'ключ-для-подписи-токенов');
     Config::set('unsubscribe.enabled', true);
@@ -57,6 +60,24 @@ function unsubscribeOff(): void
 {
     Config::set('unsubscribe.enabled', false);
     Config::set('app.url', '');
+
+    // Ключ подписи возвращаем сразу: с чужим ключом соседние тесты не расшифруют
+    // настройки транспортов, сохранённые раньше
+    Config::set('app.key', unsubscribeOriginalKey());
+}
+
+/**
+ * Настоящий ключ приложения, каким он был до подмены.
+ */
+function unsubscribeOriginalKey(): string
+{
+    static $key = null;
+
+    if ($key === null) {
+        $key = (string) Config::get('app.key', '');
+    }
+
+    return $key;
 }
 
 test('токен отписки подписан и разбирается обратно', function (): void {
