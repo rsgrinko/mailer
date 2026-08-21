@@ -268,6 +268,31 @@ test('после отказа доставка ждёт повтора, а по�
     assertSame('failed', (string) $subscription['last_status']);
 });
 
+test('проверка связи уходит без письма и возвращает ответ сервера', function (): void {
+    $ids  = webhookFixtures();
+    $stub = startWebhookStub();
+
+    $id           = webhookSubscription(['url' => 'http://127.0.0.1:' . $stub['port'] . '/hook']);
+    $subscription = (array) (new WebhookSubscriptionRepository())->find($id);
+
+    $deliveryId = (new Dispatcher())->ping($subscription, $ids['project']);
+    $delivery   = (array) (new WebhookRepository())->find($deliveryId);
+
+    try {
+        $ok = (new WebhookSender())->deliver($delivery);
+    } finally {
+        $log = stopWebhookStub($stub);
+    }
+
+    assertTrue($ok);
+    assertSame(null, $delivery['message_id'], 'за проверкой связи письма нет');
+    assertContains('X-Mailer-Event: ' . Event::PING, $log);
+
+    $payload = (array) json_decode((string) $delivery['payload'], true);
+    assertSame(Event::PING, $payload['event']);
+    assertTrue(!isset($payload['data']['message']), 'письма в теле быть не должно');
+});
+
 test('секрет подписки лежит в базе зашифрованным', function (): void {
     Config::set('app.key', Crypto::generateKey());
 

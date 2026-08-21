@@ -61,7 +61,8 @@ src/                 ядро сервиса, namespace Mailer\
   Domain/            Project, TransportProfile — строка базы как объект для логики;
                      Permission (реестр прав), Scope (чьи записи видно), Viewer (кто смотрит)
   Storage/           Database (обёртка PDO, диалекты sqlite/mysql), Migrator
-  Repository/        доступ к таблицам: Message, Project, Transport, Template, Event, Webhook
+  Repository/        доступ к таблицам: Message, Project, Transport, Template, Event,
+                     Webhook (доставки) и WebhookSubscription (подписки проектов)
   Security/          ApiKey (генерация/хеш), Crypto (шифрование настроек транспорта)
   Message/           Message (DTO), Address, Attachment, MimeBuilder, MimeParser, Encoder
   Dkim/              Signer — DKIM-подпись rsa-sha256, relaxed/relaxed
@@ -69,7 +70,8 @@ src/                 ядро сервиса, namespace Mailer\
                      LogTransport, NullTransport, FailoverTransport, RoundRobinTransport, Factory
   Queue/             Queue (enqueue/claim/complete/fail + backoff), Worker
   RateLimit/         RateLimiter — лимиты на проект и на транспорт
-  Webhook/           Sender — доставка вебхуков с HMAC-подписью и ретраями
+  Webhook/           Event (реестр событий), Payload (конверт тела), Dispatcher
+                     (событие -> подписки проекта), WebhookSender (доставка, подпись, ретраи)
   Template/          Renderer — шаблоны с подстановкой {{ переменных }}
   Http/              Router, Route, Request, Response, Kernel, Middleware/, Controllers/ (API)
   Ui/                контроллеры, прослойки и вьюхи веб-панели мониторинга
@@ -112,7 +114,7 @@ var/                 runtime: SQLite-база, логи, spool вложений,
         |                                   |
         +------------> транспорт <----------+
                           |
-             sent / failed (retry с backoff) -> message_events -> вебхук проекта
+             sent / failed (retry с backoff) -> message_events -> вебхуки проекта
 ```
 
 Статусы сообщения: `queued` -> `sending` -> `sent` | `failed` | `canceled`.
@@ -123,7 +125,9 @@ var/                 runtime: SQLite-база, логи, spool вложений,
 ## 5. Модель данных
 
 - `projects` — клиенты API: имя, префикс и хеш API-ключа, транспорт по умолчанию,
-  лимиты (в час/сутки), URL и секрет вебхука, флаг активности, `owner_id` — владелец.
+  лимиты (в час/сутки), флаг активности, `owner_id` — владелец. Колонки `webhook_url`
+  и `webhook_secret` остались от прежнего одного вебхука на проект: данные из них
+  переехали в `project_webhooks`, код их больше не читает.
 - `transports` — профили отправки: тип (`smtp|sendmail|log|null|failover|roundrobin`),
   JSON-настройки (пароль зашифрован), приоритет, суточный лимит, активность,
   `owner_id` и `shared` — чей транспорт и виден ли он всем.
@@ -143,7 +147,13 @@ var/                 runtime: SQLite-база, логи, spool вложений,
 - `message_events` — история: принято, попытка, отправлено, ошибка, ретрай, вебхук,
   подмена отправителя.
 - `templates` — шаблоны писем (тема, html, text) с переменными `{{ var }}`, `owner_id` — владелец.
-- `webhook_deliveries` — очередь доставки вебхуков.
+- `project_webhooks` — подписки проекта на события: адрес, зашифрованный секрет,
+  список событий (пустой — все), `payload_version` (2 — конверт, 1 — прежний плоский
+  формат для приёмников, написанных до него), активность и отметка о последней доставке.
+  У проекта их может быть сколько угодно.
+- `webhook_deliveries` — очередь доставки: тело запроса, заголовки, ответ сервера и
+  время ответа. Ответ храним, потому что иначе чужой приёмник нечем отлаживать:
+  код 500 без тела не говорит ничего. Разобранные чистит воркер по `WEBHOOK_KEEP_DAYS`.
 - `counters` — счётчики для rate limit (ключ + окно) и неудачных попыток входа в панель.
 - `users` — пользователи панели: логин, хеш пароля, имя, активность, последний вход,
   `role_id` — выданная роль.
@@ -168,6 +178,18 @@ var/                 runtime: SQLite-база, логи, spool вложений,
   `Mailer\Domain\Permission`), `is_system` у встроенной роли администратора — её права
   не меняются и удалить её нельзя, иначе панель останется без хозяина.
 
+Событие наружу уходит через `Webhook\Dispatcher` и только через него: кто-то зовёт
+`message()` (или `recipient()` — у отписки письма нет), а диспетчер сам находит подписки
+проекта, собирает тело и ставит доставки. Тому, кто зовёт, ни про подписки, ни про
+формат тела знать не нужно, и свои ошибки диспетчер глушит — вебхук не должен ронять
+отправку письма. Новое событие — константа в `Webhook\Event` (там же подпись по-русски,
+миграция не нужна) плюс вызов диспетчера в том месте, где оно случается.
+
+Тело — конверт `{id, event, occurred_at, project, data}`, где `id` совпадает с
+идентификатором доставки: по нему принимающая сторона отличает повтор от нового события.
+Подписывается строка «время.тело» (`X-Mailer-Signature: t=…,v1=…`), поэтому перехваченный
+запрос нельзя переиграть через час. Подписки с `payload_version = 1` получают прежний
+плоский формат и прежнюю подпись — их приёмники писались до конверта, ломать их нельзя.
 SMTP-соединение живёт от письма к письму: `SmtpTransport` держит открытый `SmtpClient`,
 а `Sender` — сам транспорт (один, по отпечатку строки из базы: поправили настройки —
 собирается заново). Перед каждым следующим письмом идёт `RSET` — он же проверка, что
