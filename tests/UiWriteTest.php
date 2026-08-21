@@ -196,7 +196,9 @@ test('транспорт заводится и правится через фо�
 });
 
 test('пароль SMTP из формы ложится в базу зашифрованным', function (): void {
-    withConfig(['ui.auth' => true], static function (): void {
+    // Ключ задаём свой: без APP_KEY шифровать нечем, и пароль ляжет открытым —
+    // это отдельный, ниже проверенный случай, а не поломка
+    withConfig(['ui.auth' => true, 'app.key' => Mailer\Security\Crypto::generateKey()], static function (): void {
         $transports = new TransportRepository();
 
         assertSame(302, uiPost('/ui/transports/save', [
@@ -221,6 +223,39 @@ test('пароль SMTP из формы ложится в базу зашифр�
         $settings = (array) ((array) $transports->find($id))['settings'];
         assertSame('пароль-из-формы', (string) $settings['password'], 'пароль должен читаться обратно');
         assertSame('smtp.example.com', (string) $settings['host']);
+
+        assertSame(302, uiPost('/ui/transports/' . $id . '/delete')->status());
+    });
+});
+
+test('без APP_KEY пароль сохраняется как есть — сервис работает, но незашифрованным', function (): void {
+    // Так ведёт себя свежая установка без ключа: шифровать нечем, поэтому пароль
+    // ложится открытым. Ронять на этом отправку нельзя, но и молча считать
+    // такое шифрованием тоже — тест закрепляет, что поведение именно такое
+    withConfig(['ui.auth' => true, 'app.key' => ''], static function (): void {
+        $transports = new TransportRepository();
+
+        assertSame(302, uiPost('/ui/transports/save', [
+            'name'       => 'форма-smtp-без-ключа',
+            'type'       => 'smtp',
+            'host'       => 'smtp.example.com',
+            'port'       => 465,
+            'username'   => 'user@example.com',
+            'password'   => 'пароль-без-ключа',
+            'from_email' => 'smtp@example.com',
+        ])->status());
+
+        $id  = (int) ((array) $transports->findByName('форма-smtp-без-ключа'))['id'];
+        $raw = (string) ((array) Database::instance()->selectOne(
+            'SELECT settings FROM transports WHERE id = :id',
+            ['id' => $id]
+        ))['settings'];
+
+        assertNotContains('enc:v1:', $raw, 'шифровать нечем, метки шифрования быть не должно');
+        assertContains('пароль-без-ключа', $raw, 'без ключа пароль лежит открытым — это и проверяем');
+
+        $settings = (array) ((array) $transports->find($id))['settings'];
+        assertSame('пароль-без-ключа', (string) $settings['password'], 'читаться он должен по-прежнему');
 
         assertSame(302, uiPost('/ui/transports/' . $id . '/delete')->status());
     });
