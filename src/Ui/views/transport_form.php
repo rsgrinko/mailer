@@ -169,6 +169,20 @@ $isNew    = $transport === null;
                 <span>Проверять сертификат сервера</span>
             </label>
 
+            <label class="inline">
+                <input type="checkbox" name="keepalive" <?= ($settings['keepalive'] ?? true) ? 'checked' : '' ?>>
+                <span>Не рвать соединение между письмами</span>
+            </label>
+            <p class="small muted">Подключение с TLS и авторизацией стоит дороже самого письма,
+                поэтому очередь уходит в одну сессию. Выключать стоит, только если сервер этого
+                не любит.</p>
+
+            <label>
+                <span>Писем в одной сессии</span>
+                <input type="number" name="session_limit" value="<?= (int) ($settings['session_limit'] ?? 100) ?>">
+            </label>
+            <p class="small muted">Дальше сервис переподключится сам: 0 — не считать.</p>
+
             <h2 style="font-size:14px; margin-top:16px">sendmail</h2>
             <label>
                 <span>Путь к бинарнику</span>

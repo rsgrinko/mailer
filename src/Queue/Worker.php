@@ -152,6 +152,10 @@ final class Worker
             }
 
             if ($messages === [] && !$this->stopping) {
+                // Очередь пуста — прощаемся с SMTP-сервером: сессия между письмами
+                // нужна, а висеть в ней просто так незачем
+                $this->sender->closeTransports();
+
                 sleep(max(1, $sleep));
             }
 
@@ -161,6 +165,7 @@ final class Worker
             }
         }
 
+        $this->sender->closeTransports();
         $this->heartbeat();
         $this->say($this->restarting
             ? 'Воркер остановлен для перезапуска, обработано писем: ' . $this->processed

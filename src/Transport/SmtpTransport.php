@@ -5,17 +5,29 @@ declare(strict_types=1);
 namespace Mailer\Transport;
 
 use Mailer\Message\Message;
+use Mailer\Support\Config;
 
 /**
  * Отправка через внешний SMTP-сервер: Яндекс, Mail.ru, Gmail, корпоративный релей.
  *
+ * Соединение между письмами не рвётся: воркер отправляет очередь пачками, а на каждое
+ * подключение уходит рукопожатие TLS и авторизация — заметно дороже самого письма.
+ * Сессия закрывается сама, когда воркеру нечего делать (Sender::closeTransports()),
+ * после ошибки или когда в ней ушло session_limit писем: серверы не любят вечных сессий.
+ *
  * Настройки транспорта:
  *   host, port, encryption (ssl|tls|none), username, password,
  *   auth_mode (auto|login|plain|cram-md5), timeout, verify_peer,
- *   from_email, from_name, dkim
+ *   keepalive, session_limit, from_email, from_name, dkim
  */
 final class SmtpTransport extends BaseTransport
 {
+    /** Открытая сессия, если её решили не закрывать после прошлого письма */
+    private ?SmtpClient $client = null;
+
+    /** Сколько писем ушло в текущей сессии */
+    private int $sent = 0;
+
     public function type(): string
     {
         return 'smtp';
@@ -31,22 +43,30 @@ final class SmtpTransport extends BaseTransport
             throw TransportException::permanent('Не указан отправитель письма');
         }
 
-        $client = $this->client();
+        $client = $this->session();
 
         try {
             $response = $client->send($sender, $recipients, $mime);
-            $client->quit();
+            $this->sent++;
+
+            $limit = $this->sessionLimit();
+
+            if (!$this->keepAlive() || ($limit > 0 && $this->sent >= $limit)) {
+                $this->close();
+            }
 
             return $response;
         } catch (TransportException $e) {
-            $client->close();
+            // После ошибки состояние сессии неизвестно: следующее письмо начнём с нуля
+            $this->drop();
+
             throw $e;
         }
     }
 
     public function test(): string
     {
-        $client = $this->client();
+        $client = $this->newClient();
 
         try {
             return $client->ping();
@@ -55,7 +75,58 @@ final class SmtpTransport extends BaseTransport
         }
     }
 
-    private function client(): SmtpClient
+    /**
+     * Закрывает сессию, если она открыта. Зовётся, когда очередь опустела.
+     */
+    public function close(): void
+    {
+        $this->client?->quit();
+
+        $this->drop();
+    }
+
+    /**
+     * Соединение для следующего письма: либо уже открытое, либо новое.
+     */
+    private function session(): SmtpClient
+    {
+        // RSET заодно проверяет, что сервер не закрыл соединение, пока мы ходили в базу
+        if ($this->client !== null && $this->client->reset()) {
+            return $this->client;
+        }
+
+        $this->drop();
+
+        $this->client = $this->newClient();
+
+        return $this->client;
+    }
+
+    /**
+     * Забыть сессию, ничего не спрашивая у сервера.
+     */
+    private function drop(): void
+    {
+        $this->client?->close();
+
+        $this->client = null;
+        $this->sent   = 0;
+    }
+
+    private function keepAlive(): bool
+    {
+        return (bool) $this->setting('keepalive', Config::get('smtp.keepalive', true));
+    }
+
+    /**
+     * Сколько писем отправляем в одной сессии. 0 — сколько угодно.
+     */
+    private function sessionLimit(): int
+    {
+        return max(0, (int) $this->setting('session_limit', Config::get('smtp.session_limit', 100)));
+    }
+
+    private function newClient(): SmtpClient
     {
         return new SmtpClient([
             'host'         => (string) $this->setting('host', ''),

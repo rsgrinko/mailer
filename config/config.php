@@ -86,6 +86,12 @@ return [
         'timeout'      => Env::int('SMTP_TIMEOUT', 30),
         'verify_peer'  => Env::bool('SMTP_VERIFY_PEER', true),
         'local_domain' => Env::string('SMTP_LOCAL_DOMAIN', ''),
+        // Соединение живёт от письма к письму: рукопожатие TLS с авторизацией
+        // дороже самой отправки. Сессия закрывается сама, когда очередь опустела
+        'keepalive'     => Env::bool('SMTP_KEEPALIVE', true),
+        // Сколько писем шлём в одной сессии (0 — сколько угодно): серверы
+        // не любят вечных соединений и рвут их сами
+        'session_limit' => Env::int('SMTP_SESSION_LIMIT', 100),
     ],
 
     // Локальный SMTP-релей (то, как к нам приходят письма от чужих приложений)

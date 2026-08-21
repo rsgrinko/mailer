@@ -19,6 +19,7 @@ use Mailer\Support\Config;
 use Mailer\Support\Logger;
 use Mailer\Transport\TransportException;
 use Mailer\Transport\TransportFactory;
+use Mailer\Transport\TransportInterface;
 use Throwable;
 
 /**
@@ -39,6 +40,14 @@ final class Sender
     private RateLimiter $limiter;
     private SuppressionRepository $suppressions;
     private Logger $logger;
+
+    /**
+     * Транспорт, которым отправляли прошлое письмо: SMTP держит в нём открытую
+     * сессию, а собирать её заново на каждое письмо дороже самой отправки.
+     *
+     * @var array{key: string, transport: TransportInterface}|null
+     */
+    private ?array $opened = null;
 
     public function __construct(?Database $db = null)
     {
@@ -75,8 +84,8 @@ final class Sender
                 $row['transport_id'] !== null ? (int) $row['transport_id'] : null,
                 $project
             );
-            $transport     = $resolved['transport'];
             $transportRow  = $resolved['row'];
+            $transport     = $this->keepOpen($transportRow, $resolved['transport']);
             $transportName = (string) $transportRow['name'];
 
             // Суточный лимит транспорта: не ошибка письма, просто отложим
@@ -165,6 +174,63 @@ final class Sender
      * @param array<string, mixed> $row
      * @return array{was: string, now: string}|null
      */
+    /**
+     * Закрывает открытую сессию транспорта. Воркер зовёт это, когда очередь опустела:
+     * держать соединение впустую незачем, сервер всё равно его скоро оборвёт.
+     */
+    public function closeTransports(): void
+    {
+        if ($this->opened !== null) {
+            $this->opened['transport']->close();
+        }
+
+        $this->opened = null;
+    }
+
+    /**
+     * Синхронная отправка живёт один запрос: прощаемся с сервером сами,
+     * а не бросаем соединение открытым.
+     */
+    public function __destruct()
+    {
+        $this->closeTransports();
+    }
+
+    /**
+     * Тот же транспорт, что и в прошлый раз, — если настройки не менялись.
+     *
+     * Держим ровно один: письма в очереди идут вперемешку, и разводить открытые
+     * соединения на все транспорты сразу незачем.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function keepOpen(array $row, TransportInterface $fresh): TransportInterface
+    {
+        $key = $this->transportKey($row);
+
+        if ($this->opened !== null && $this->opened['key'] === $key) {
+            return $this->opened['transport'];
+        }
+
+        $this->closeTransports();
+        $this->opened = ['key' => $key, 'transport' => $fresh];
+
+        return $fresh;
+    }
+
+    /**
+     * Отпечаток настроек транспорта: поправили их в панели — прошлая сессия не подойдёт.
+     * Отметки о последней отправке в него не входят, иначе он менялся бы каждое письмо.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function transportKey(array $row): string
+    {
+        unset($row['last_used_at'], $row['last_error'], $row['updated_at']);
+
+        return md5(serialize($row));
+    }
+
     private function senderReplaced(array $row, Message $message): ?array
     {
         $was = trim((string) ($row['from_email'] ?? ''));

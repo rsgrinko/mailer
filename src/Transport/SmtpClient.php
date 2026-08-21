@@ -134,6 +134,9 @@ final class SmtpClient
             throw TransportException::permanent('У письма нет получателей');
         }
 
+        // Диалог показываем в панели при ошибке — от прошлого письма он не нужен
+        $this->conversation = [];
+
         $this->connect();
 
         $this->command('MAIL FROM:<' . $from . '>', [250], 'MAIL FROM');
@@ -178,6 +181,40 @@ final class SmtpClient
         if ($this->socket !== null) {
             @fclose($this->socket);
             $this->socket = null;
+        }
+    }
+
+    /**
+     * Открыто ли соединение прямо сейчас.
+     */
+    public function connected(): bool
+    {
+        return $this->socket !== null && !feof($this->socket);
+    }
+
+    /**
+     * Сбрасывает состояние сессии командой RSET перед следующим письмом.
+     *
+     * Заодно это проверка живости: сервер закрывает простаивающие соединения молча,
+     * и узнать об этом лучше здесь, а не на середине DATA. false — соединением
+     * пользоваться нельзя, нужно подключаться заново.
+     */
+    public function reset(): bool
+    {
+        if (!$this->connected()) {
+            $this->close();
+
+            return false;
+        }
+
+        try {
+            $this->command('RSET', [250], 'RSET');
+
+            return true;
+        } catch (\Throwable) {
+            $this->close();
+
+            return false;
         }
     }
 

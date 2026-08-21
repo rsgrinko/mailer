@@ -41,6 +41,13 @@ abstract class BaseTransport implements TransportInterface
     }
 
     /**
+     * Сессию держит только SMTP — остальным закрывать нечего.
+     */
+    public function close(): void
+    {
+    }
+
+    /**
      * Значение настройки транспорта.
      */
     protected function setting(string $key, mixed $default = null): mixed

@@ -71,6 +71,16 @@ final class FailoverTransport extends BaseTransport
             : TransportException::permanent($text, [], $lastException);
     }
 
+    /**
+     * Сессию держат вложенные транспорты — закрывать нужно у них.
+     */
+    public function close(): void
+    {
+        foreach ($this->children as $transport) {
+            $transport->close();
+        }
+    }
+
     public function test(): string
     {
         $report = [];
