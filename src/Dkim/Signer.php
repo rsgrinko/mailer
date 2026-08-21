@@ -132,10 +132,55 @@ final class Signer
     }
 
     /**
-     * Разбивает длинный заголовок подписи на строки — иначе некоторые серверы ругаются.
+     * Разбивает длинный заголовок подписи на строки.
+     *
+     * Переносить можно не где угодно. Получатель перед проверкой разворачивает
+     * заголовок обратно и схлопывает пробелы: перенос посреди значения превращается
+     * в пробел, которого при подписи не было, и подпись перестаёт сходиться —
+     * письмо приходит с провалившимся DKIM. Поэтому переносим только там, где
+     * пробел и так есть, — после «;», — и внутри b=, которое при проверке очищается.
      */
     private function wrap(string $header): string
     {
-        return trim(chunk_split($header, 100, "\r\n\t"));
+        $limit    = 78;
+        $position = strrpos($header, '; b=');
+
+        if ($position === false) {
+            return $header;
+        }
+
+        $lines = [];
+        $line  = '';
+
+        // Поля до подписи: собираем в строки по границам «; »
+        foreach (explode('; ', substr($header, 0, $position)) as $index => $tag) {
+            $piece = $index === 0 ? $tag : $tag;
+
+            if ($line === '') {
+                $line = $piece;
+
+                continue;
+            }
+
+            if (strlen($line) + strlen($piece) + 2 > $limit) {
+                $lines[] = $line . ';';
+                $line    = $piece;
+
+                continue;
+            }
+
+            $line .= '; ' . $piece;
+        }
+
+        $lines[] = $line . ';';
+
+        // Сама подпись — одним полем, её base64 режем как удобно
+        $signature = substr($header, $position + 2);
+
+        foreach (explode("\r\n", trim(chunk_split($signature, $limit, "\r\n"))) as $chunk) {
+            $lines[] = $chunk;
+        }
+
+        return implode("\r\n\t", $lines);
     }
 }

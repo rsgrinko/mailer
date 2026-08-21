@@ -138,29 +138,22 @@ test('шифрование настроек возвращает исходно�
     });
 });
 
-test('DKIM-подпись добавляется в письмо', function (): void {
-    // На Windows без openssl.cnf ключ не создать — там тест пропускаем
-    $pair = @openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
-    if ($pair === false) {
-        while (openssl_error_string() !== false) {
-            // вычищаем очередь ошибок openssl, чтобы они не всплыли в следующем тесте
-        }
-
-        skipTest('openssl не может создать ключ в этом окружении (нет openssl.cnf)');
-    }
-
-    openssl_pkey_export($pair, $privateKey);
+test('DKIM-подпись добавляется в готовое письмо', function (): void {
+    // Ключи берём общим помощником: он умеет поднимать openssl и на Windows.
+    // Сама подпись проверяется криптографией в DeliveryTest, здесь — что её
+    // вообще навешивают на письмо, собранное не нами
+    $keys = dkimKeys();
 
     $mime = "From: sender@example.com\r\nTo: user@example.com\r\nSubject: тема\r\n"
         . "Date: " . date('r') . "\r\nMIME-Version: 1.0\r\n"
         . "Content-Type: text/plain; charset=UTF-8\r\n\r\nтело письма\r\n";
 
-    $signed = (new Signer('example.com', 'mail', $privateKey))->sign($mime);
+    $signed = (new Signer('example.com', 'mail', $keys['private']))->sign($mime);
 
     assertContains('DKIM-Signature:', $signed);
     assertContains('d=example.com', $signed);
     assertContains('s=mail', $signed);
-    assertContains('bh=', $signed);
+    assertSame(1, dkimVerify($signed, $keys['public']), 'подпись должна сходиться и на чужом письме');
 });
 
 test('заглушка отправки не падает', function (): void {
