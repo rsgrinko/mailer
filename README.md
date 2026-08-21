@@ -89,6 +89,7 @@ sendmail_path = /var/www/mailer/bin/mailer-sendmail -t -i
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — подключение приложений без SDK.
 - [docs/DEPLOY.md](docs/DEPLOY.md) — установка на сервер: nginx, systemd, MySQL.
 - [docs/OPERATIONS.md](docs/OPERATIONS.md) — эксплуатация: панель, журнал действий, метрики, разбор проблем.
+- [docs/REGRESS.md](docs/REGRESS.md) — отчёты о больших проверках: что смотрели и что чинили.
 
 ## Требования
 

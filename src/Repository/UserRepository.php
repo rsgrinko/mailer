@@ -96,9 +96,11 @@ final class UserRepository
      */
     public function countManagers(): int
     {
+        // Встроенная роль считается всегда: её права берутся из кода, в базе их может
+        // не быть — там лежит набор, записанный при создании роли
         return (int) $this->db->value(
             'SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id'
-            . ' WHERE u.active = 1 AND r.permissions LIKE :permission',
+            . ' WHERE u.active = 1 AND (r.is_system = 1 OR r.permissions LIKE :permission)',
             ['permission' => '%"' . Permission::USERS_MANAGE . '"%']
         );
     }
@@ -345,9 +347,12 @@ final class UserRepository
      */
     private function hydrate(array $row): array
     {
-        $permissions = json_decode((string) ($row['role_permissions'] ?? '[]'), true);
+        // Правило про встроенную роль живёт в RoleRepository — здесь только зовём его
+        $row['permissions'] = RoleRepository::permissions(
+            (int) ($row['role_is_system'] ?? 0) === 1,
+            (string) ($row['role_permissions'] ?? '[]')
+        );
 
-        $row['permissions'] = Permission::filter(is_array($permissions) ? $permissions : []);
         unset($row['role_permissions']);
 
         return $row;

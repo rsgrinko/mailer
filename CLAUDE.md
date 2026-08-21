@@ -93,7 +93,8 @@ deploy/              nginx.conf, systemd-юниты, шпаргалки по у�
 .gitea/workflows/    сборка в Gitea Actions: пока только прогон тестов
 .github/workflows/   то же самое для зеркала на GitHub
 docs/                документация: API, SDK, интеграции, деплой, эксплуатация,
-                     LOADTEST.md — замеры и узкие места, CI.md — сборка
+                     LOADTEST.md — замеры и узкие места, REGRESS.md — отчёты о проверках,
+                     CI.md — сборка
 var/                 runtime: SQLite-база, логи, spool вложений, .eml из log-транспорта
 ```
 

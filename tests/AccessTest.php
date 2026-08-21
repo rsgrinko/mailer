@@ -390,6 +390,51 @@ test('с UI_ALLOW_ACTIONS=false кнопок над письмами нет, а 
     accessLogout();
 });
 
+test('встроенная роль получает новые права сама', function (): void {
+    $roles = new RoleRepository();
+    $admin = $roles->findByName(RoleRepository::ADMIN);
+
+    assertTrue($admin !== null, 'встроенная роль администратора должна быть');
+    assertSame(Permission::all(), $admin['permissions'], 'у администратора должны быть все права из кода');
+
+    // Даже если в базе записан старый, короткий набор
+    Mailer\Storage\Database::instance()->update(
+        'roles',
+        ['permissions' => json_encode([Permission::MESSAGES_VIEW])],
+        ['id' => (int) $admin['id']]
+    );
+
+    assertSame(
+        Permission::all(),
+        $roles->findByName(RoleRepository::ADMIN)['permissions'],
+        'права встроенной роли читаются из кода, а не из базы'
+    );
+});
+
+test('вошедший под встроенной ролью получает новые права сразу', function (): void {
+    $ids   = accessFixtures();
+    $roles = new RoleRepository();
+    $users = new UserRepository();
+
+    $admin = $roles->findByName(RoleRepository::ADMIN);
+
+    // Права вошедшего собирает UserRepository своим запросом — правило про встроенную
+    // роль должно работать и там, иначе администратор не увидит новый раздел
+    $temp = $users->create([
+        'login'    => 'test-admin',
+        'password' => 'parol123',
+        'role_id'  => (int) $admin['id'],
+    ]);
+
+    $viewer = Viewer::fromUser((array) $users->find((int) $temp['id']));
+
+    assertTrue($viewer->can(Permission::SUPPRESSIONS_VIEW), 'администратору доступен стоп-лист');
+    assertTrue($viewer->can(Permission::AUDIT_VIEW), 'администратору доступен журнал');
+    assertTrue($viewer->isAdmin(), 'у администратора есть доступ к чужим данным');
+
+    $users->delete((int) $temp['id'], true);
+});
+
 test('прибираем за собой данные проверок прав', function (): void {
     $ids = accessFixtures();
 

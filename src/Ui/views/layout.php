@@ -193,7 +193,8 @@ $menu = [
 
         label { display: block; margin-bottom: 12px; }
         label > span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
-        label.inline { display: inline-flex; align-items: center; gap: 8px; }
+        /* Каждая галочка с подписью — своей строкой; рядом их ставит только .row */
+        label.inline { display: flex; align-items: center; gap: 8px; }
         label.inline > span { margin: 0; color: var(--text); font-size: 14px; }
 
         button, .btn {
@@ -246,6 +247,8 @@ $menu = [
         .muted { color: var(--muted); }
         .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
         .nowrap { white-space: nowrap; }
+        /* Длинная строка без пробелов (JSON служебных значений) иначе распирает таблицу */
+        .break { word-break: break-all; white-space: normal; }
         .small { font-size: 12px; }
 
         pre {

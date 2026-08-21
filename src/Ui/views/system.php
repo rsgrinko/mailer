@@ -186,7 +186,7 @@ use Mailer\Ui\View;
                 <?php foreach ($settings as $key => $item) { ?>
                     <tr>
                         <td class="mono small"><?= View::e($key) ?></td>
-                        <td class="mono small"><?= View::e(mb_strimwidth($item['value'], 0, 120, '…')) ?></td>
+                        <td class="mono small break"><?= View::e(mb_strimwidth($item['value'], 0, 120, '…')) ?></td>
                         <td class="small"><?= View::e(View::date($item['updated_at'])) ?></td>
                     </tr>
                 <?php } ?>

@@ -201,10 +201,32 @@ final class RoleRepository
      */
     private function hydrate(array $row): array
     {
-        $permissions = json_decode((string) ($row['permissions'] ?? '[]'), true);
-
-        $row['permissions'] = Permission::filter(is_array($permissions) ? $permissions : []);
+        $row['permissions'] = self::permissions(
+            (int) ($row['is_system'] ?? 0) === 1,
+            (string) ($row['permissions'] ?? '[]')
+        );
 
         return $row;
+    }
+
+    /**
+     * Права роли: у встроенной — из кода, у остальных — из базы.
+     *
+     * Список прав растёт вместе с разделами панели, а записанный когда-то набор
+     * оставил бы администратора без нового раздела — так и вышло со стоп-листом
+     * и журналом действий. Тем же правилом пользуется UserRepository, когда
+     * собирает права вошедшего.
+     *
+     * @return array<int, string>
+     */
+    public static function permissions(bool $isSystem, string $json): array
+    {
+        if ($isSystem) {
+            return Permission::admin();
+        }
+
+        $codes = json_decode($json, true);
+
+        return Permission::filter(is_array($codes) ? $codes : []);
     }
 }
