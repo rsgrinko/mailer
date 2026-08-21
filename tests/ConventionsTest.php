@@ -179,3 +179,42 @@ test('у страниц панели есть имена маршрутов', fu
 
     assertSame([], $nameless, 'без имени на страницу нельзя сослаться через View::route()');
 });
+
+test('каждая настройка из кода описана в .env.example', function (): void {
+    $known = [];
+
+    foreach ((array) file(MAILER_ROOT . '/.env.example', FILE_IGNORE_NEW_LINES) as $line) {
+        $line = trim((string) $line);
+
+        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+            continue;
+        }
+
+        $known[] = trim(explode('=', $line, 2)[0]);
+    }
+
+    $missing = [];
+
+    // Настройки читаются только через Env::string|int|bool|array — их и ищем.
+    // Кроме кода сервиса смотрим и сам config.php: там их большая часть
+    $files = array_merge(
+        array_filter(projectPhpFiles(), static fn (string $file): bool => str_contains($file, '/src/')),
+        [MAILER_ROOT . '/config/config.php']
+    );
+
+    foreach ($files as $file) {
+        preg_match_all(
+            '/Env::(?:string|int|bool|array)\(\s*[\'"]([A-Z][A-Z0-9_]*)[\'"]/',
+            (string) file_get_contents($file),
+            $matches
+        );
+
+        foreach ($matches[1] as $key) {
+            if (!in_array($key, $known, true) && !in_array($key, $missing, true)) {
+                $missing[] = shortPath($file) . ' — ' . $key;
+            }
+        }
+    }
+
+    assertSame([], $missing, 'настройка есть в коде, но её нет в .env.example');
+});

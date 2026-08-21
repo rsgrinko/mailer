@@ -118,3 +118,21 @@ test('пагинация считает одно и то же обоими сп�
 
     assertSame((int) $db->value('SELECT COUNT(*) FROM messages'), $messages->paginate([], 1, 5)['total']);
 });
+
+test('неявный коммит MySQL не ломает транзакцию', function (): void {
+    // В MySQL CREATE TABLE и ALTER коммитят транзакцию сами, и до commit() код
+    // доходит с уже закрытой транзакцией. Раньше это давало «There is no active
+    // transaction» на успешно выполненной миграции. Здесь то же самое повторяем
+    // руками: коммитим внутри обработчика, как это делает за нас MySQL
+    $db = new Mailer\Storage\Database(['driver' => 'sqlite', 'sqlite' => ['path' => ':memory:']]);
+
+    $result = $db->transaction(static function (Mailer\Storage\Database $db): string {
+        $db->execute('CREATE TABLE proba (id INTEGER)');
+        $db->pdo()->commit();
+
+        return 'готово';
+    });
+
+    assertSame('готово', $result, 'закрытая изнутри транзакция не должна ронять вызов');
+    assertTrue($db->hasTable('proba'), 'сделанное внутри должно остаться');
+});

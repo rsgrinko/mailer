@@ -35,16 +35,19 @@ final class AuthController
     public function loginForm(Request $request): Response
     {
         return Response::html(View::renderBare('login', [
-            'login' => '',
-            'error' => '',
-            'next'  => self::next($request),
+            'login'    => '',
+            'error'    => '',
+            'next'     => self::next($request),
+            'remember' => false,
+            'days'     => Auth::rememberDays(),
         ], 'Вход'));
     }
 
     public function login(Request $request): Response
     {
-        $login = trim((string) $request->input('login', ''));
-        $next  = self::safeNext((string) $request->input('next', ''));
+        $login    = trim((string) $request->input('login', ''));
+        $next     = self::safeNext((string) $request->input('next', ''));
+        $remember = $request->input('remember') !== null;
 
         $result = Auth::attempt($login, (string) $request->input('password', ''), $request->ip());
 
@@ -53,14 +56,17 @@ final class AuthController
             Audit::login(0, $login, false);
 
             return Response::html(View::renderBare('login', [
-                'login' => $login,
-                'error' => $result['error'],
-                'next'  => $next,
+                'login'    => $login,
+                'error'    => $result['error'],
+                'next'     => $next,
+                // Галку возвращаем как была: перенабирать её после опечатки в пароле незачем
+                'remember' => $remember,
+                'days'     => Auth::rememberDays(),
             ], 'Вход'), 401);
         }
 
         $user = $result['user'];
-        Auth::login($user);
+        Auth::login($user, $remember);
         $this->users->touchLogin((int) $user['id'], $request->ip());
         $this->logger->info('Вход в панель', ['login' => $user['login'], 'ip' => $request->ip()]);
         Audit::login((int) $user['id'], (string) $user['login'], true);

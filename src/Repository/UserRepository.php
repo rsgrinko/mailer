@@ -186,6 +186,12 @@ final class UserRepository
         }
 
         $this->db->update('users', $fields, ['id' => $id]);
+
+        // Отключили — гасим и «запомнить меня»: иначе кука будет ходить с каждым
+        // запросом, пока не упрётся в проверку активности
+        if ((int) ($fields['active'] ?? 1) === 0) {
+            (new RememberTokenRepository($this->db))->forgetUser($id);
+        }
     }
 
     /**
@@ -210,6 +216,9 @@ final class UserRepository
 
     /**
      * Задаёт новый пароль.
+     *
+     * Заодно гасит все «запомнить меня» этого пользователя: пароль меняют в том числе
+     * потому, что его увели, — и старая кука не должна пережить смену.
      */
     public function setPassword(int $id, string $password): void
     {
@@ -221,6 +230,8 @@ final class UserRepository
             'password_hash' => Password::hash($password),
             'updated_at'    => Database::now(),
         ], ['id' => $id]);
+
+        (new RememberTokenRepository($this->db))->forgetUser($id);
     }
 
     /**
@@ -235,6 +246,7 @@ final class UserRepository
         }
 
         if ($force) {
+            (new RememberTokenRepository($this->db))->forgetUser($id);
             $this->db->delete('users', ['id' => $id]);
 
             return;
@@ -252,6 +264,7 @@ final class UserRepository
             $this->checkLastManager($user, 'удалить');
         }
 
+        (new RememberTokenRepository($this->db))->forgetUser($id);
         $this->db->delete('users', ['id' => $id]);
     }
 

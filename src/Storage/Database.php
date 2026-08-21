@@ -271,7 +271,14 @@ final class Database
 
         try {
             $result = $callback($this);
-            $this->pdo->commit();
+
+            // Коммитим только если транзакция ещё жива. В MySQL любой CREATE TABLE
+            // или ALTER коммитит её сам (implicit commit), и до сюда мы доходим
+            // с уже закрытой транзакцией — тогда commit() бросает «There is no
+            // active transaction» на ровном месте, хотя всё выполнено
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->commit();
+            }
 
             return $result;
         } catch (Throwable $e) {

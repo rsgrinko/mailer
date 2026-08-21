@@ -68,6 +68,28 @@ final class Csrf
     }
 
     /**
+     * Вернуть в сессию прежний токен.
+     *
+     * Нужно ровно в одном месте: при тихом входе по куке «запомнить меня». Сессия
+     * там заводится заново, а страница у человека в браузере открыта со старым
+     * токеном — и её отправка должна пройти, а не упереться в «форма устарела».
+     */
+    public static function restore(string $token): void
+    {
+        if ($token === '') {
+            return;
+        }
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION[self::SESSION_KEY] = $token;
+
+            return;
+        }
+
+        self::$fallback = $token;
+    }
+
+    /**
      * Скрытое поле для формы.
      */
     public static function field(): string

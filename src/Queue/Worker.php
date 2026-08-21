@@ -7,6 +7,7 @@ namespace Mailer\Queue;
 use Mailer\Bounce\Collector;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\AuditRepository;
+use Mailer\Repository\RememberTokenRepository;
 use Mailer\Repository\SettingRepository;
 use Mailer\Repository\WebhookRepository;
 use Mailer\Storage\Database;
@@ -237,6 +238,20 @@ final class Worker
 
         $this->purgeAudit();
         $this->purgeWebhooks();
+        $this->purgeRememberTokens();
+    }
+
+    /**
+     * Просроченные «запомнить меня». Войти по такому токену уже нельзя — Auth сверяет
+     * срок сам, — но копиться в базе им незачем.
+     */
+    private function purgeRememberTokens(): void
+    {
+        $removed = (new RememberTokenRepository($this->db))->purgeExpired();
+
+        if ($removed > 0) {
+            $this->logger->info('Удалены просроченные токены «запомнить меня»', ['count' => $removed]);
+        }
     }
 
     /**

@@ -429,3 +429,34 @@ test('журнал действий пишется от имени того, к�
         uiPost('/ui/suppressions/' . (int) $row['id'] . '/delete');
     });
 });
+
+test('пользователь удаляется кнопкой в панели', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $users = new UserRepository();
+
+        assertSame(302, uiPost('/ui/users/save', [
+            'login'           => 'na-udalenie',
+            'password'        => 'parol123',
+            'password_repeat' => 'parol123',
+            'active'          => 'on',
+        ])->status());
+
+        $user = assertNotNull($users->findByLogin('na-udalenie'), 'пользователь должен завестись');
+
+        $response = uiPost('/ui/users/' . (int) $user['id'] . '/delete');
+
+        assertStatus(302, $response, 'удаление должно проходить, а не упираться в токен формы');
+        assertNull($users->find((int) $user['id']), 'пользователь должен удалиться');
+        assertSame('deleted', (string) assertNotNull(lastAudit('user'))['action']);
+    });
+});
+
+test('себя из панели не удалить', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $id = uiWriteAdmin();
+
+        uiPost('/ui/users/' . $id . '/delete');
+
+        assertNotNull((new UserRepository())->find($id), 'пользователь не должен удалить сам себя');
+    });
+});

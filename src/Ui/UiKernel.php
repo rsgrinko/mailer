@@ -38,12 +38,14 @@ final class UiKernel
     public function handle(Request $request): Response
     {
         try {
-            return $this->router()->dispatch($request);
+            // Куку «запомнить меня» навешиваем здесь: её ставит и снимает Auth, а
+            // заголовки есть только у ответа. Одно место — про неё нельзя забыть
+            return Auth::applyCookies($this->router()->dispatch($request));
         } catch (RecordNotFound $e) {
             // Записи нет — говорим об этом и возвращаем в список раздела
             View::flash($e->getMessage(), 'error');
 
-            return Response::redirect(View::route($e->route()));
+            return Auth::applyCookies(Response::redirect(View::route($e->route())));
         } catch (Throwable $e) {
             // По этому коду ошибку находят в логе: пользователю текст исключения показывать нечего
             $code = strtoupper(bin2hex(random_bytes(3)));
@@ -60,10 +62,10 @@ final class UiKernel
                 ? $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ')'
                 : 'Внутренняя ошибка сервиса. Подробности в логе, код ошибки: ' . $code;
 
-            return Response::html(
+            return Auth::applyCookies(Response::html(
                 View::render('error', ['message' => $details], 'Ошибка'),
                 500
-            );
+            ));
         }
     }
 
