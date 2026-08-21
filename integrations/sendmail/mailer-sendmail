@@ -1,0 +1,189 @@
+#!/bin/sh
+#
+# Подмена системного sendmail на чужом сервере.
+#
+# Читает готовое письмо из stdin и отдаёт его почтовому сервису по HTTP API.
+# В отличие от bin/mailer-sendmail из самого проекта, этому скрипту не нужны ни
+# PHP, ни доступ к базе: только curl и ключ проекта. Ставится на любой сервер,
+# откуда видно адрес сервиса.
+#
+# Установка:
+#   1. Скопировать скрипт, например в /usr/local/bin/mailer-sendmail, chmod +x
+#   2. Скопировать mailer-sendmail.conf.example в /etc/mailer-sendmail.conf,
+#      прописать адрес сервиса и ключ проекта, chmod 600
+#   3. Прописать в php.ini:  sendmail_path = /usr/local/bin/mailer-sendmail -t -i
+#      либо подменить системный /usr/sbin/sendmail симлинком на этот скрипт
+#
+# Ключи (как у настоящего sendmail):
+#   -t          взять получателей из заголовков письма
+#   -i, -oi     одиночная точка не заканчивает письмо
+#   -f адрес    отправитель конверта
+#   -F имя      имя отправителя (передаётся сервису как есть)
+#   остальные ключи принимаются и игнорируются, адреса берутся из аргументов
+#
+# Коды выхода (как принято у sendmail):
+#   0  — письмо принято сервисом
+#   64 — ошибка в аргументах
+#   65 — сервис не принял письмо: не прошло проверку
+#   75 — временная ошибка (сеть, сервис недоступен, 5xx) — повторить позже
+#   77 — ключ не подошёл
+#   78 — не настроено: нет адреса сервиса или ключа
+
+set -eu
+
+CONF="${MAILER_CONF:-/etc/mailer-sendmail.conf}"
+
+if [ -r "$CONF" ]; then
+    # shellcheck disable=SC1090
+    . "$CONF"
+fi
+
+MAILER_URL="${MAILER_URL:-}"
+MAILER_KEY="${MAILER_KEY:-}"
+MAILER_TIMEOUT="${MAILER_TIMEOUT:-15}"
+MAILER_TAG="${MAILER_TAG:-}"
+MAILER_LOG="${MAILER_LOG:-}"
+
+log() {
+    [ -n "$MAILER_LOG" ] && printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$MAILER_LOG" 2>/dev/null
+    return 0
+}
+
+fail() {
+    log "$2"
+    printf 'mailer-sendmail: %s\n' "$2" >&2
+    exit "$1"
+}
+
+if [ -z "$MAILER_URL" ] || [ -z "$MAILER_KEY" ]; then
+    fail 78 "не настроено: нужны MAILER_URL и MAILER_KEY в $CONF"
+fi
+
+command -v curl >/dev/null 2>&1 || fail 78 "не найден curl — без него скрипт работать не может"
+
+# --- Разбор аргументов ----------------------------------------------------
+from=''
+sender_name=''
+recipients=''
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -f)
+            shift
+            [ $# -gt 0 ] || fail 64 "ключ -f без адреса"
+            from="$1"
+            ;;
+        -f*)
+            from="${1#-f}"
+            ;;
+        -F)
+            shift
+            [ $# -gt 0 ] || fail 64 "ключ -F без имени"
+            sender_name="$1"
+            ;;
+        -F*)
+            sender_name="${1#-F}"
+            ;;
+        -t|-i|-oi|-odb|-odf|-oem|-om|-bm|--)
+            # Обычные ключи sendmail: получателей и так берём из письма
+            ;;
+        -*)
+            # Прочие ключи принимаем молча — так делает и настоящий sendmail
+            ;;
+        *)
+            recipients="$recipients$1
+"
+            ;;
+    esac
+    shift
+done
+
+body="$(cat)"
+
+[ -n "$body" ] || fail 64 "на вход не пришло письмо"
+
+# --- Сборка JSON ----------------------------------------------------------
+# Экранируем строку по правилам JSON: обратные слэши, кавычки, управляющие
+# символы. Перевод строки становится \n, возврат каретки — \r, поэтому письмо
+# доезжает до сервиса ровно таким, каким его отдало приложение.
+# Управляющие символы, кроме табуляции и переводов строк, в письмах не встречаются:
+# всё, что не текст, приходит уже в base64 или quoted-printable.
+json_escape() {
+    awk '
+        BEGIN { ORS = "" }
+        NR > 1 { print "\\n" }
+        {
+            line = $0
+            gsub(/\\/, "\\\\", line)
+            gsub(/"/, "\\\"", line)
+            gsub(/\r/, "\\r", line)
+            gsub(/\t/, "\\t", line)
+            print line
+        }
+    '
+}
+
+escaped_body="$(printf '%s' "$body" | json_escape)"
+escaped_from="$(printf '%s' "$from" | json_escape)"
+escaped_name="$(printf '%s' "$sender_name" | json_escape)"
+escaped_tag="$(printf '%s' "$MAILER_TAG" | json_escape)"
+host="$(hostname 2>/dev/null || echo unknown)"
+
+payload="{\"raw\":\"$escaped_body\""
+
+if [ -n "$from" ]; then
+    payload="$payload,\"envelope_from\":\"$escaped_from\""
+fi
+
+if [ -n "$recipients" ]; then
+    list=''
+    for address in $recipients; do
+        escaped="$(printf '%s' "$address" | json_escape)"
+        if [ -z "$list" ]; then
+            list="\"$escaped\""
+        else
+            list="$list,\"$escaped\""
+        fi
+    done
+    payload="$payload,\"envelope_to\":[$list]"
+fi
+
+if [ -n "$MAILER_TAG" ]; then
+    payload="$payload,\"tag\":\"$escaped_tag\""
+fi
+
+payload="$payload,\"meta\":{\"host\":\"$host\",\"shim\":\"sh\""
+
+if [ -n "$sender_name" ]; then
+    payload="$payload,\"sender_name\":\"$escaped_name\""
+fi
+
+payload="$payload}}"
+
+# --- Отправка -------------------------------------------------------------
+answer="$(printf '%s' "$payload" | curl --silent --show-error \
+    --max-time "$MAILER_TIMEOUT" \
+    --write-out '\n%{http_code}' \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: Bearer $MAILER_KEY" \
+    --data-binary @- \
+    "$MAILER_URL/api/v1/messages" 2>&1)" || fail 75 "сервис недоступен: $answer"
+
+code="$(printf '%s' "$answer" | tail -n 1)"
+text="$(printf '%s' "$answer" | sed '$d')"
+
+case "$code" in
+    2*)
+        log "принято: $text"
+        exit 0
+        ;;
+    401|403)
+        fail 77 "ключ не подошёл (код $code): $text"
+        ;;
+    400|404|422)
+        fail 65 "сервис не принял письмо (код $code): $text"
+        ;;
+    *)
+        fail 75 "временная ошибка (код $code): $text"
+        ;;
+esac

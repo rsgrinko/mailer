@@ -18,6 +18,9 @@ sendmail, log/null, failover- и round-robin-цепочки).
 3. Легаси-приложения без возможности правки кода — через sendmail-shim
    (`bin/mailer-sendmail`, прописывается в `sendmail_path`) или локальный SMTP-релей
    (`127.0.0.1:2525`).
+4. Чужие серверы, где нет ни сервиса, ни базы — через удалённый sendmail-shim
+   (`integrations/sendmail/`): тот же `sendmail_path`, но письмо уходит в API по сети.
+   Своей очереди у него нет: сервис недоступен — код выхода 75, повторяет отправитель.
 
 ## 2. Жёсткие правила проекта
 
@@ -93,6 +96,8 @@ integrations/        всё, что ставится на сторону кли�
   laravel/           composer-пакет для Laravel: почтовый транспорт и клиент API
   dokuwiki/          плагин mailerservice для вики на DokuWiki
   wordpress/         плагин mailerservice для WordPress (wp_mail через сервис)
+  sendmail/          подмена системного sendmail на чужом сервере: shell+curl и PHP,
+                     письмо уходит в API по сети (bin/mailer-sendmail — только локально)
 tools/               инструменты разработки: loadtest.php — нагрузочные замеры
 tests/               собственный мини-тестраннер (без PHPUnit) и тесты
 deploy/              nginx.conf, systemd-юниты, шпаргалки по установке

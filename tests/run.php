@@ -65,16 +65,21 @@ Database::setInstance(new Database([
  */
 function testDatabaseFile(string $name): string
 {
+    // Своё имя на каждый вызов: прошлый файл может ещё держать другой процесс
+    static $counter = 0;
+
     $path = (string) Config::get('paths.tmp', MAILER_ROOT . '/var/tmp')
-        . '/test-' . $name . '-' . getmypid() . '.sqlite';
+        . '/test-' . $name . '-' . getmypid() . '-' . ++$counter . '.sqlite';
 
     if (!is_dir(dirname($path))) {
         mkdir(dirname($path), 0775, true);
     }
 
     foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+        // Файл может держать ещё живой процесс с прошлого теста — тогда просто
+        // берём следующее имя, а этот подчистится в конце прогона
         if (is_file($file)) {
-            unlink($file);
+            @unlink($file);
         }
     }
 
