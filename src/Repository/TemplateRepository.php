@@ -68,11 +68,19 @@ final class TemplateRepository
     }
 
     /**
+     * Шаблон по имени. Область видимости нужна там, где имя пришло снаружи:
+     * письмо по API ссылается на шаблон строкой, и чужой подставляться не должен.
+     *
      * @return array<string, mixed>|null
      */
-    public function findByName(string $name): ?array
+    public function findByName(string $name, ?Scope $scope = null): ?array
     {
-        return $this->db->selectOne('SELECT * FROM templates WHERE name = :name', ['name' => $name]);
+        [$where, $params] = self::where($scope, ' AND ');
+
+        return $this->db->selectOne(
+            'SELECT * FROM templates WHERE name = :name' . $where,
+            array_merge(['name' => $name], $params)
+        );
     }
 
     /**

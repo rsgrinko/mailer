@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Message;
 
+use Mailer\Domain\Scope;
 use Mailer\Repository\TemplateRepository;
 use Mailer\Template\Renderer;
 use Mailer\Support\Config;
@@ -29,10 +30,14 @@ final class MessageFactory
      *
      * @param array<string, mixed> $payload
      * @param array<string, mixed>|null $project проект, от имени которого пришёл запрос
+     * @param Scope|null $scope среди чьих шаблонов искать названный в письме;
+     *                          по умолчанию — среди доступных проекту
      * @return array{message: Message, options: array<string, mixed>}
      */
-    public function build(array $payload, ?array $project = null): array
+    public function build(array $payload, ?array $project = null, ?Scope $scope = null): array
     {
+        $scope = $scope ?? Scope::forProject($project);
+
         $validator = new Validator();
         $message   = new Message();
 
@@ -111,7 +116,9 @@ final class MessageFactory
         $templateData = (array) ($payload['template_data'] ?? $payload['data'] ?? []);
 
         if ($templateName !== '') {
-            $template = $this->templates->findByName($templateName);
+            // Шаблон ищется среди доступных: чужой для клиента не существует,
+            // поэтому и ответ такой же, как на несуществующее имя
+            $template = $this->templates->findByName($templateName, $scope);
 
             if ($template === null) {
                 $validator->add('Шаблон «' . $templateName . '» не найден');

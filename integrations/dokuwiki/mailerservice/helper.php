@@ -164,9 +164,15 @@ class helper_plugin_mailerservice extends DokuWiki_Plugin
         }
 
         if ($status < 200 || $status >= 300) {
-            $message = isset($decoded['error']['message'])
-                ? (string) $decoded['error']['message']
-                : $this->getLang('err_status') . ' ' . $status;
+            // 502 в режиме sync — не ошибка запроса: письмо приняли, а почтовый
+            // сервер его не взял. Блока error там нет, причина лежит в info
+            if (isset($decoded['error']['message'])) {
+                $message = (string) $decoded['error']['message'];
+            } elseif (isset($decoded['info']) && $decoded['info'] !== '') {
+                $message = (string) $decoded['info'];
+            } else {
+                $message = $this->getLang('err_status') . ' ' . $status;
+            }
 
             $details = isset($decoded['error']['details']['errors']) && is_array($decoded['error']['details']['errors'])
                 ? implode('; ', $decoded['error']['details']['errors'])

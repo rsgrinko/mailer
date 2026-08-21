@@ -81,11 +81,20 @@ class MailerService_Mailer
             return true;
         }
 
-        $this->writeLog('Сервис не принял письмо', array(
+        // В режиме «дождаться отправки» письмо может быть уже в сервисе: его приняли,
+        // а почтовый сервер не взял. Идентификатор пригодится, чтобы найти его в панели
+        $response = $this->api->getResponse();
+        $failed   = array(
             'to'      => $to,
             'subject' => $subject,
             'error'   => $this->api->getError(),
-        ));
+        );
+
+        if (isset($response['id']) && $response['id'] !== '') {
+            $failed['id'] = (string) $response['id'];
+        }
+
+        $this->writeLog('Сервис не принял письмо', $failed);
 
         // Запасной вариант: письмо важнее статистики, отдаём его обычной отправке.
         if (!empty($this->options['fallback'])) {

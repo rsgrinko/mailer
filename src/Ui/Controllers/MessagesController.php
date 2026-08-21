@@ -422,7 +422,9 @@ final class MessagesController
         }
 
         try {
-            $result = $this->service->accept($payload, $project, MessageRepository::SOURCE_UI, $viewer->id());
+            // Область — своя, а не проекта: шаблон и транспорт выбраны из списков,
+            // которые панель уже отфильтровала по правам смотрящего
+            $result = $this->service->accept($payload, $project, MessageRepository::SOURCE_UI, $viewer->id(), $scope);
 
             View::flash(
                 'Письмо ' . $result['uuid'] . ': ' . $result['status']

@@ -138,7 +138,7 @@ final class TemplatesController extends ResourceController
         $template = $this->require($this->templates->find($id, $scope));
 
         if ($action === 'send') {
-            return $this->sendPreview($request, $template, $viewer);
+            return $this->sendPreview($request, $template, $scope, $viewer);
         }
 
         if ($action === 'delete') {
@@ -159,7 +159,7 @@ final class TemplatesController extends ResourceController
      *
      * @param array<string, mixed> $template
      */
-    private function sendPreview(Request $request, array $template, Viewer $viewer): Response
+    private function sendPreview(Request $request, array $template, Scope $scope, Viewer $viewer): Response
     {
         $id   = (int) $template['id'];
         $to   = trim((string) $request->input('to', ''));
@@ -195,7 +195,7 @@ final class TemplatesController extends ResourceController
                 'template'      => (string) $template['name'],
                 'template_data' => $data,
                 'sync'          => true,
-            ], null, MessageRepository::SOURCE_UI, $viewer->id());
+            ], null, MessageRepository::SOURCE_UI, $viewer->id(), $scope);
 
             Audit::action('template', $id, 'пробное письмо по шаблону «' . $template['name'] . '» на ' . $to);
             View::flash('Письмо ' . $result['uuid'] . ': ' . $result['status']

@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Простое письмо: как это выглядит в обычном проекте.
  *
- * Запуск: php sdk/examples/basic.php
+ * Запуск: php integrations/php-sdk/examples/basic.php
  */
 
 require dirname(__DIR__) . '/MailerClient.php';

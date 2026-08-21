@@ -12,6 +12,7 @@ declare(strict_types=1);
 use Mailer\Domain\Permission;
 use Mailer\Domain\Scope;
 use Mailer\Domain\Viewer;
+use Mailer\Http\ApiKernel;
 use Mailer\Http\Router;
 use Mailer\MailService;
 use Mailer\Repository\EventRepository;
@@ -82,6 +83,9 @@ function accessFixtures(): array
 
     $created = (new ProjectRepository())->create(['name' => 'проект-петра', 'owner_id' => (int) $petr['id']]);
 
+    // Проект Ивана с ключом: через него проверяем, что API не достаёт чужого
+    $ivanProject = (new ProjectRepository())->create(['name' => 'проект-ивана', 'owner_id' => (int) $ivan['id']]);
+
     $transport = (new TransportRepository())->create([
         'name'     => 'транспорт-петра',
         'type'     => 'null',
@@ -125,6 +129,8 @@ function accessFixtures(): array
         'nick'      => (int) $nick['id'],
         'olga'      => (int) $olga['id'],
         'project'   => (int) $created['project']['id'],
+        'ivan_project' => (int) $ivanProject['project']['id'],
+        'ivan_key'  => (string) $ivanProject['key'],
         'transport' => $transport,
         'shared'    => $shared,
         'template'  => $template,
@@ -506,11 +512,66 @@ test('каждое право попадает в форму роли', function
     }
 });
 
+test('ключ проекта не достаёт чужих шаблонов и транспортов', function (): void {
+    $ids    = accessFixtures();
+    $kernel = new ApiKernel();
+    $auth   = ['authorization' => 'Bearer ' . $ids['ivan_key']];
+
+    // Список шаблонов — только свои: чужих имён в нём быть не должно
+    $templates = $kernel->handle(httpRequest('GET', '/api/v1/templates', $auth));
+
+    assertSame(200, $templates->status());
+    assertTrue(
+        !str_contains($templates->body(), 'шаблон-петра'),
+        'в списке шаблонов не должно быть чужого'
+    );
+
+    // Чужой шаблон по имени — как несуществующий
+    $byTemplate = $kernel->handle(httpRequest('POST', '/api/v1/messages', $auth, [
+        'to'       => 'user@example.com',
+        'template' => 'шаблон-петра',
+    ]));
+
+    assertSame(422, $byTemplate->status());
+    assertContains('не найден', $byTemplate->body());
+
+    // Чужой транспорт по имени — тоже
+    $byTransport = $kernel->handle(httpRequest('POST', '/api/v1/messages', $auth, [
+        'to'        => 'user@example.com',
+        'subject'   => 'Чужим транспортом',
+        'text'      => 'Текст',
+        'transport' => 'транспорт-петра',
+    ]));
+
+    assertSame(422, $byTransport->status());
+    assertContains('Транспорт', $byTransport->body());
+
+    // А общий транспорт доступен всем — для того его и заводят
+    $shared = $kernel->handle(httpRequest('POST', '/api/v1/messages', $auth, [
+        'to'        => 'user@example.com',
+        'subject'   => 'Общим транспортом',
+        'text'      => 'Текст',
+        'transport' => 'транспорт-общий',
+        'sync'      => true,
+    ]));
+
+    assertSame(200, $shared->status());
+
+    // За собой прибираем: письмо в очереди мешает соседним тестам
+    $sent = (array) json_decode($shared->body(), true);
+    $row  = (new MessageRepository())->findAny((string) ($sent['id'] ?? ''));
+
+    if ($row !== null) {
+        (new MessageRepository())->delete((int) $row['id']);
+    }
+});
+
 test('прибираем за собой данные проверок прав', function (): void {
     $ids = accessFixtures();
 
     (new MessageRepository())->delete($ids['message']);
     (new ProjectRepository())->delete($ids['project']);
+    (new ProjectRepository())->delete($ids['ivan_project']);
     (new TemplateRepository())->delete($ids['template']);
     (new TransportRepository())->delete($ids['transport']);
     (new TransportRepository())->delete($ids['shared']);

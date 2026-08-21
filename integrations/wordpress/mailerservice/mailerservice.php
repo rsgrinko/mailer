@@ -4,7 +4,7 @@
  * Plugin Name: Сервис рассылки
  * Plugin URI: https://github.com/rsgrinko/mailer
  * Description: Отправка почты WordPress через сервис рассылки по HTTP API вместо mail(). Вся почта сайта уходит в очередь сервиса: регистрация, сброс пароля, уведомления плагинов, формы.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Requires PHP: 7.0
  * Requires at least: 5.7
  * Author: Роман Гринько
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MAILERSERVICE_VERSION', '1.0.2');
+define('MAILERSERVICE_VERSION', '1.0.3');
 define('MAILERSERVICE_FILE', __FILE__);
 define('MAILERSERVICE_DIR', plugin_dir_path(__FILE__));
 

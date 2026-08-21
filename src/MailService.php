@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer;
 
+use Mailer\Domain\Scope;
 use Mailer\Message\MessageFactory;
 use Mailer\Queue\Queue;
 use Mailer\Queue\Sender;
@@ -43,22 +44,28 @@ final class MailService
      * @param string $source откуда пришло письмо: api, sendmail, smtpd, cli, ui
      * @param int $ownerId кому принадлежит письмо, если оно не от проекта: панель
      *                     ставит того, кто нажал «отправить», иначе владельца берут у проекта
+     * @param Scope|null $scope в чьих шаблонах и транспортах искать те, что названы
+     *                     в письме по имени. По умолчанию — в доступных проекту;
+     *                     панель передаёт область того, кто нажал «отправить»
      * @return array<string, mixed> сведения о принятом письме
      */
     public function accept(
         array $payload,
         ?array $project = null,
         string $source = MessageRepository::SOURCE_API,
-        int $ownerId = 0
+        int $ownerId = 0,
+        ?Scope $scope = null
     ): array {
-        $built   = $this->factory->build($payload, $project);
+        $scope   = $scope ?? Scope::forProject($project);
+        $built   = $this->factory->build($payload, $project, $scope);
         $message = $built['message'];
         $options = $built['options'];
 
-        // Клиент может попросить конкретный транспорт по имени
+        // Клиент может попросить конкретный транспорт по имени — но только из тех,
+        // что ему доступны: свои плюс общие
         $transportId = null;
         if (!empty($options['transport'])) {
-            $transport = $this->transports->findByName((string) $options['transport']);
+            $transport = $this->transports->findByName((string) $options['transport'], $scope);
             if ($transport === null) {
                 throw new MailerException('Транспорт «' . $options['transport'] . '» не найден', [], 422);
             }

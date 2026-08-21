@@ -371,6 +371,49 @@ class Client
     }
 
     /**
+     * Стоп-лист: адреса, которым сервис больше не пишет. Письмо такому адресу
+     * отсеивается на приёме, а если закрыты все получатели — письмо получает
+     * статус suppressed и никуда не уходит.
+     *
+     * @param array<string, string|int> $filters reason, search, page, per_page
+     * @return array<string, mixed>
+     */
+    public function suppressions(array $filters = []): array
+    {
+        $query = $filters === [] ? '' : '?' . http_build_query($filters);
+
+        return $this->request('GET', '/api/v1/suppressions' . $query);
+    }
+
+    /**
+     * Закрыть адрес: писать ему больше не будем.
+     *
+     * @param string $reason bounce, complaint, unsubscribe или manual
+     * @return array<string, mixed>
+     */
+    public function suppress(string $email, string $reason = 'manual', string $note = ''): array
+    {
+        $payload = ['email' => $email, 'reason' => $reason];
+
+        if ($note !== '') {
+            $payload['note'] = $note;
+        }
+
+        return $this->request('POST', '/api/v1/suppressions', $payload);
+    }
+
+    /**
+     * Открыть адрес обратно. Адрес, закрытый для всех проектов сразу (так ложатся
+     * отказы почтовых серверов), через API не снять — только в панели.
+     *
+     * @return array<string, mixed>
+     */
+    public function unsuppress(string $email): array
+    {
+        return $this->request('DELETE', '/api/v1/suppressions/' . rawurlencode($email));
+    }
+
+    /**
      * Состояние сервиса.
      *
      * @return array<string, mixed>
@@ -408,7 +451,11 @@ class Client
             return $decoded;
         }
 
-        $message = (string) ($decoded['error']['message'] ?? 'Сервис ответил кодом ' . $status);
+        // 502 в режиме sync — это не ошибка запроса: письмо приняли, но отправить
+        // не вышло. Блока error в таком ответе нет, причина лежит в info
+        $message = (string) ($decoded['error']['message']
+            ?? $decoded['info']
+            ?? 'Сервис ответил кодом ' . $status);
         $errors  = (array) ($decoded['error']['details']['errors'] ?? []);
 
         throw new MailerException($message, $status, $errors, $decoded);

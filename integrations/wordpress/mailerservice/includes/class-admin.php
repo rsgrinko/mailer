@@ -515,7 +515,7 @@ class MailerService_Admin
     {
         $value = isset($this->options['transport']) ? $this->options['transport'] : '';
         echo '<input type="text" class="regular-text" name="mailerservice_options[transport]" value="' . esc_attr($value) . '">';
-        echo '<p class="description">Имя транспорта в сервисе. Пусто — транспорт по умолчанию.</p>';
+        echo '<p class="description">Имя транспорта в сервисе. Доступны транспорты владельца проекта и общие. Пусто — транспорт по умолчанию.</p>';
     }
 
     public function fieldTag()

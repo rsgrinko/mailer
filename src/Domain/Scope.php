@@ -41,6 +41,23 @@ final class Scope
         return new self($userId);
     }
 
+    /**
+     * Область видимости проекта-клиента API: ему доступны записи его владельца.
+     * Ключ проекта — такой же вход в данные, как и панель, и чужие шаблоны с
+     * транспортами через него доставаться не должны.
+     *
+     * У проекта, заведённого до разделения прав, владельца нет — ограничивать
+     * его нечем, поэтому null: видно всё, как и раньше.
+     *
+     * @param array<string, mixed>|null $project
+     */
+    public static function forProject(?array $project): ?self
+    {
+        $ownerId = (int) ($project['owner_id'] ?? 0);
+
+        return $ownerId > 0 ? self::owner($ownerId) : null;
+    }
+
     public function isAll(): bool
     {
         return $this->ownerId === null;

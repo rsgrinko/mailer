@@ -148,9 +148,15 @@ class MailerService_API
         $this->response = $decoded;
 
         if ($status < 200 || $status >= 300) {
-            $message = isset($decoded['error']['message'])
-                ? (string) $decoded['error']['message']
-                : 'Сервис ответил кодом ' . $status;
+            // 502 в режиме «дождаться отправки» — не ошибка запроса: письмо приняли,
+            // а почтовый сервер его не взял. Блока error там нет, причина в info
+            if (isset($decoded['error']['message'])) {
+                $message = (string) $decoded['error']['message'];
+            } elseif (isset($decoded['info']) && $decoded['info'] !== '') {
+                $message = (string) $decoded['info'];
+            } else {
+                $message = 'Сервис ответил кодом ' . $status;
+            }
 
             $details = '';
             if (isset($decoded['error']['details']['errors']) && is_array($decoded['error']['details']['errors'])) {

@@ -5,7 +5,7 @@
 
 | Каталог | Что это |
 |---------|---------|
-| `php-sdk/` | мини-SDK для PHP-проектов: один файл `MailerClient.php` и примеры |
+| `php-sdk/` | мини-SDK для PHP-проектов: один файл `MailerClient.php`, примеры и README |
 | `laravel/` | composer-пакет `rsgrinko/laravel-mailerservice-sdk`: почтовый транспорт и клиент API для Laravel |
 | `dokuwiki/mailerservice/` | плагин DokuWiki: вся почта вики уходит через сервис |
 | `wordpress/mailerservice/` | плагин WordPress: вся почта сайта (`wp_mail`) уходит через сервис |

@@ -102,11 +102,20 @@ final class TransportRepository
     }
 
     /**
+     * Транспорт по имени. Область видимости нужна там, где имя пришло снаружи:
+     * клиент API просит транспорт строкой, и чужой личный SMTP ему не положен.
+     * Общие (`shared = 1`) доступны всем — для того их и заводят.
+     *
      * @return array<string, mixed>|null
      */
-    public function findByName(string $name): ?array
+    public function findByName(string $name, ?Scope $scope = null): ?array
     {
-        $row = $this->db->selectOne('SELECT * FROM transports WHERE name = :name', ['name' => $name]);
+        [$sql, $params] = self::scoped($scope);
+
+        $row = $this->db->selectOne(
+            'SELECT * FROM transports WHERE name = :name' . ($sql === '' ? '' : ' AND ' . $sql),
+            array_merge(['name' => $name], $params)
+        );
 
         return $row === null ? null : $this->hydrate($row);
     }
