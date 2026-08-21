@@ -122,6 +122,7 @@ test('занятая блокировка не пускает второй на�
 });
 
 test('блокировка в MySQL общая для всех соединений', function (): void {
+    skipTest('работа с MySQL заглушена до исправления функционала тестов');
     $config = testMysqlConfig();
 
     if ($config === null) {

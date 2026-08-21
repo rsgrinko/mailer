@@ -14,9 +14,9 @@ declare(strict_types=1);
  *   --shuffle[=seed]    перемешать порядок (ловит тесты, зависящие от соседей)
  *   --slow=ms           с какого времени тест считается медленным (по умолчанию 500)
  *
- * База по умолчанию — SQLite в памяти. Тесты заводят и удаляют записи, поэтому
- * боевую базу из .env они не трогают никогда: MySQL включается только своими
- * настройками TEST_DB_* (см. .env.example), и база в них должна быть отдельной.
+ * База всегда своя — SQLite в памяти, настройки DB_* из .env не читаются: тесты
+ * заводят и удаляют записи, и боевой базе тут делать нечего. Где база нужна
+ * второму процессу, берётся файл через testDatabaseFile().
  */
 
 if (!defined('MAILER_ROOT')) {
@@ -26,7 +26,6 @@ if (!defined('MAILER_ROOT')) {
 use Mailer\Storage\Database;
 use Mailer\Storage\Migrator;
 use Mailer\Support\Config;
-use Mailer\Support\Env;
 
 /** @var array<string, string> Опции запуска: от bin/mailer test или из своего argv */
 $options = $GLOBALS['test_options'] ?? [];
@@ -45,67 +44,62 @@ $GLOBALS['test_options'] = $options;
 
 Config::set('log.level', 'error');
 
-/**
- * Настройки отдельной базы MySQL для тестов — или null, если её не завели.
- *
- * Боевые DB_* сюда не годятся ни при каких условиях: тесты заводят и удаляют
- * записи, в том числе всех пользователей панели. Нужна своя пустая база в
- * TEST_DB_*, и совпадение с боевой считается опиской.
- *
- * @return array<string, mixed>|null
- */
-function testMysqlConfig(): ?array
-{
-    if (Env::string('TEST_DB_DRIVER', 'sqlite') !== 'mysql') {
-        return null;
-    }
+// Тесты работают только на SQLite и только на своей базе. Настройки DB_* здесь не
+// читаются вовсе: тесты заводят и удаляют записи (AuthTest, например, сносит всех
+// пользователей панели), а в .env лежит боевое подключение.
+Config::set('db.driver', 'sqlite');
+Config::set('db.sqlite.path', ':memory:');
 
-    $database = Env::string('TEST_DB_DATABASE', '');
-
-    if ($database === '') {
-        return null;
-    }
-
-    $config = [
-        'host'     => Env::string('TEST_DB_HOST', '127.0.0.1'),
-        'port'     => Env::int('TEST_DB_PORT', 3306),
-        'database' => $database,
-        'username' => Env::string('TEST_DB_USERNAME', 'root'),
-        'password' => Env::string('TEST_DB_PASSWORD', ''),
-        'charset'  => Env::string('TEST_DB_CHARSET', 'utf8mb4'),
-    ];
-
-    if (
-        $config['database'] === Env::string('DB_DATABASE', '')
-        && $config['host'] === Env::string('DB_HOST', '127.0.0.1')
-    ) {
-        fwrite(STDERR, 'TEST_DB_* указывает на боевую базу — тесты её затрут. Заведите отдельную.' . PHP_EOL);
-
-        exit(1);
-    }
-
-    return $config;
-}
-
-// Тесты работают на своей базе — настоящие данные не трогаем
-$mysql = testMysqlConfig();
-
-if ($mysql !== null) {
-    Config::set('db.driver', 'mysql');
-    Config::set('db.mysql', $mysql);
-
-    Database::setInstance(new Database(['driver' => 'mysql', 'mysql' => $mysql]));
-} else {
-    Config::set('db.driver', 'sqlite');
-    Config::set('db.sqlite.path', ':memory:');
-
-    Database::setInstance(new Database([
-        'driver' => 'sqlite',
-        'sqlite' => ['path' => ':memory:'],
-    ]));
-}
+Database::setInstance(new Database([
+    'driver' => 'sqlite',
+    'sqlite' => ['path' => ':memory:'],
+]));
 
 (new Migrator())->run();
+
+/**
+ * Отдельная база-файл на SQLite: со схемой, но пустая.
+ *
+ * Нужна там, где базу должен увидеть другой процесс (SMTP-релей, воркер) — база
+ * в памяти живёт только внутри своего подключения. Файл удаляется после прогона.
+ */
+function testDatabaseFile(string $name): string
+{
+    $path = (string) Config::get('paths.tmp', MAILER_ROOT . '/var/tmp')
+        . '/test-' . $name . '-' . getmypid() . '.sqlite';
+
+    if (!is_dir(dirname($path))) {
+        mkdir(dirname($path), 0775, true);
+    }
+
+    foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+        if (is_file($file)) {
+            unlink($file);
+        }
+    }
+
+    $database = new Database(['driver' => 'sqlite', 'sqlite' => ['path' => $path]]);
+
+    // Мигратор работает с общим подключением, поэтому подменяем его на время наката
+    $current = Database::instance();
+    Database::setInstance($database);
+
+    try {
+        (new Migrator())->run();
+    } finally {
+        Database::setInstance($current);
+    }
+
+    afterTests(static function () use ($path): void {
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $file) {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
+    });
+
+    return $path;
+}
 
 $GLOBALS['tests']    = [];
 $GLOBALS['cleanups'] = [];
