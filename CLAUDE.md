@@ -105,6 +105,7 @@ deploy/              nginx.conf, systemd-юниты, шпаргалки по у�
 .github/workflows/   то же самое для зеркала на GitHub
 docs/                документация: API, SDK, интеграции, деплой, эксплуатация,
                      TRANSPORTS.md — как устроены транспорты и как добавить новый,
+                     IDEAS.md — что ещё можно сделать в сервисе,
                      LOADTEST.md — замеры и узкие места, REGRESS.md — отчёты о проверках,
                      CI.md — сборка
 var/                 runtime: SQLite-база, логи, spool вложений, .eml из log-транспорта
