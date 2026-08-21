@@ -70,13 +70,45 @@ final class RoleRepository
     }
 
     /**
-     * Роль администратора. Нужна первому пользователю и консоли.
+     * Роль администратора. Ищем по признаку встроенности, а не по имени: имя роли
+     * можно поменять в панели, и тогда поиск по строке ничего не найдёт.
      *
      * @return array<string, mixed>|null
      */
     public function admin(): ?array
     {
-        return $this->findByName(self::ADMIN);
+        $row = $this->db->selectOne('SELECT * FROM roles WHERE is_system = 1 ORDER BY id');
+
+        return $row === null ? $this->findByName(self::ADMIN) : $this->hydrate($row);
+    }
+
+    /**
+     * Роль администратора, а если её нет — заводим. Нужно первому пользователю:
+     * остаться без роли ему нельзя, иначе панель не пустит его никуда дальше обзора,
+     * а выдать права будет некому.
+     *
+     * @return array<string, mixed>
+     */
+    public function ensureAdmin(): array
+    {
+        $role = $this->admin();
+
+        if ($role !== null) {
+            return $role;
+        }
+
+        $name = $this->findByName(self::ADMIN) === null ? self::ADMIN : self::ADMIN . ' сервиса';
+
+        $id = $this->db->insert('roles', [
+            'name'        => $name,
+            'description' => 'Полный доступ ко всем данным и настройкам сервиса',
+            'permissions' => self::encode(Permission::admin()),
+            'is_system'   => 1,
+            'created_at'  => Database::now(),
+            'updated_at'  => Database::now(),
+        ]);
+
+        return (array) $this->find($id);
     }
 
     /**

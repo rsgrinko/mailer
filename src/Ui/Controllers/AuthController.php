@@ -162,15 +162,16 @@ final class AuthController
         }
 
         try {
-            // Первый пользователь получает роль администратора: больше её выдать некому
-            $admin = $this->roles->admin();
+            // Первый пользователь получает роль администратора: больше её выдать некому.
+            // Если роли в базе нет (снесли руками, база из старой миграции) — заводим
+            $admin = $this->roles->ensureAdmin();
 
             $user = $this->users->create([
                 'login'    => $login,
                 'password' => $password,
                 'name'     => trim((string) $request->input('name', '')),
                 'active'   => true,
-                'role_id'  => $admin === null ? 0 : (int) $admin['id'],
+                'role_id'  => (int) $admin['id'],
             ]);
         } catch (Throwable $e) {
             return Response::html(View::renderBare('setup', [

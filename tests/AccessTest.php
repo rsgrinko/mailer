@@ -435,6 +435,67 @@ test('вошедший под встроенной ролью получает �
     $users->delete((int) $temp['id'], true);
 });
 
+test('первый пользователь получает роль администратора со всеми правами', function (): void {
+    $roles = new RoleRepository();
+    $users = new UserRepository();
+
+    // Роль администратора ищется по признаку встроенности, а не по имени: имя можно
+    // поменять в панели, и первый пользователь остался бы вообще без прав
+    $admin = $roles->admin();
+    assertTrue($admin !== null, 'встроенная роль должна находиться');
+
+    $roles->update((int) $admin['id'], ['name' => 'Хозяин сервиса']);
+
+    $found = $roles->ensureAdmin();
+
+    assertSame((int) $admin['id'], (int) $found['id'], 'переименованная роль всё равно находится');
+    assertSame(Permission::all(), $found['permissions'], 'у неё все права из кода');
+
+    $roles->update((int) $admin['id'], ['name' => RoleRepository::ADMIN]);
+
+    // Так первого пользователя заводит страница /ui/setup
+    $first = $users->create([
+        'login'    => 'test-first',
+        'password' => 'parol123',
+        'role_id'  => (int) $found['id'],
+    ]);
+
+    $viewer = Viewer::fromUser((array) $users->find((int) $first['id']));
+
+    foreach (Permission::all() as $permission) {
+        assertTrue($viewer->can($permission), 'администратору положено право ' . $permission);
+    }
+
+    $users->delete((int) $first['id'], true);
+});
+
+test('каждое право попадает в форму роли', function (): void {
+    // Право живёт в коде двумя строчками: константой и подписью в GROUPS. Забыли вторую —
+    // право не показывается в /ui/roles, и выдать его будет нечем
+    $constants = (new ReflectionClass(Permission::class))->getConstants();
+    $codes     = [];
+
+    foreach ($constants as $name => $value) {
+        if (is_string($value) && $name !== 'GROUPS') {
+            $codes[] = $value;
+        }
+    }
+
+    sort($codes);
+    $known = Permission::all();
+    sort($known);
+
+    assertSame($codes, $known, 'все константы прав должны быть разложены по разделам GROUPS');
+
+    // И наоборот: в форме не должно быть подписи без константы
+    foreach (Permission::GROUPS as $group => $permissions) {
+        foreach ($permissions as $code => $label) {
+            assertTrue(in_array($code, $codes, true), 'право ' . $code . ' из раздела «' . $group . '» не объявлено константой');
+            assertTrue($label !== '', 'у права ' . $code . ' нет подписи');
+        }
+    }
+});
+
 test('прибираем за собой данные проверок прав', function (): void {
     $ids = accessFixtures();
 
