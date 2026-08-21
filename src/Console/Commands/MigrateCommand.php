@@ -25,14 +25,36 @@ final class MigrateCommand extends Command
 
     public function usage(): string
     {
-        return 'migrate';
+        return 'migrate [--pretend]';
     }
 
     public function run(): int
     {
-
         $migrator = new Migrator();
-        $applied  = $migrator->run();
+
+        // --pretend показывает запросы, не трогая базу: перед накатом на боевую
+        // полезно увидеть, что именно там выполнится
+        if (isset($this->options['pretend'])) {
+            $plan = $migrator->pretend();
+
+            if ($plan === []) {
+                $this->line('Все миграции уже применены, база в порядке.');
+
+                return 0;
+            }
+
+            foreach ($plan as $name => $queries) {
+                $this->line($name . ':');
+                foreach ($queries as $sql) {
+                    $this->line('  ' . preg_replace('/\s+/', ' ', $sql));
+                }
+                $this->line();
+            }
+
+            return 0;
+        }
+
+        $applied = $migrator->run();
 
         if ($applied === []) {
             $this->line('Все миграции уже применены, база в порядке.');
@@ -40,11 +62,19 @@ final class MigrateCommand extends Command
             foreach ($applied as $name) {
                 $this->line('Применена миграция: ' . $name);
             }
+
+            // Так выглядит докат миграции, упавшей на середине: часть её шагов уже была
+            $skipped = $migrator->skipped();
+            if ($skipped !== []) {
+                $this->line('Пропущено уже выполненных шагов: ' . count($skipped));
+                foreach ($skipped as $sql) {
+                    $this->line('  ' . preg_replace('/\s+/', ' ', $sql));
+                }
+            }
         }
 
         $this->line('База: ' . Database::instance()->driver());
 
         return 0;
-    
     }
 }

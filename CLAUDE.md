@@ -60,7 +60,9 @@ src/                 ядро сервиса, namespace Mailer\
   Support/           Env, Config, Logger, Str, Uuid, Validator, MailerException
   Domain/            Project, TransportProfile — строка базы как объект для логики;
                      Permission (реестр прав), Scope (чьи записи видно), Viewer (кто смотрит)
-  Storage/           Database (обёртка PDO, диалекты sqlite/mysql), Migrator
+  Storage/           Database (обёртка PDO, диалекты sqlite/mysql), Migrator, Lock,
+                     Migration (база для миграций),
+                     Schema/ (Blueprint, Column, Types, Operation, Builder)
   Repository/        доступ к таблицам: Message, Project, Transport, Template, Event,
                      Webhook (доставки) и WebhookSubscription (подписки проектов)
   Security/          ApiKey (генерация/хеш), Crypto (шифрование настроек транспорта)
@@ -79,6 +81,7 @@ src/                 ядро сервиса, namespace Mailer\
   Bounce/            Collector — разбор ящика отказов (Pop3Client, DsnParser, Verp),
                      Unsubscribe — заголовки и токены отписки одной кнопкой
   Console/           Application (реестр и справка) + Command + Commands/ (по классу на команду)
+migrations/          миграции базы: файл на миграцию, 20260821122257_имя.php
 routes/              карта адресов: api.php и ui.php (маршруты, группы, прослойки)
 public/index.php     единая точка входа: /api/v1/... и /ui/..., корень уводит на панель
                      (у панели свой вход по логину и паролю, см. src/Ui/Auth.php)
@@ -224,6 +227,44 @@ SMTP-соединение живёт от письма к письму: `SmtpTra
 (автоинкремент, `INSERT ... ON CONFLICT` против `ON DUPLICATE KEY UPDATE`, блокировки при
 claim). По умолчанию — SQLite (`var/mailer.sqlite`), MySQL включается через `DB_DRIVER=mysql`.
 
+### 5.1. Миграции
+
+Схему меняют только миграции — файл на миграцию в каталоге `migrations/`, имя
+`20260821122257_webhook_subscriptions.php`, внутри класс `WebhookSubscriptions`
+в namespace `Mailer\Migrations`. Имя файла — это и есть имя миграции в таблице
+`migrations`: переименованный файл считается новой миграцией и применится второй раз.
+Никакого реестра нет, `Migrator` подхватывает файлы сам и идёт по ним в порядке имён.
+Новая миграция — новый файл с отметкой времени **позже** всех имеющихся.
+
+Таблица пишется не строками SQL, а описанием: `$this->create('users', function
+(Blueprint $table) { … })` и `$this->table('users', …)` для правки существующей.
+Типы отвлечённые (`string`, `integer`, `dateTime`, `text`, `longText`, `id`), в SQL их
+переводит `Schema\Types` — миграция про диалект не знает. Свой SQL (перенос данных,
+стартовые записи) — через `$this->statement($sql, $params)`, с параметрами, а не
+склейкой строк. Ссылаться на классы сервиса из миграции не стоит: миграция должна
+делать одно и то же и через год, а код к тому времени изменится.
+
+У каждой миграции есть `down()`, и он должен честно отменять `up()` — это проверяется
+тестом, который накатывает всё, откатывает и накатывает снова. `migrate` кладёт всё
+применённое за раз в одну пачку (`batch`), `migrate:rollback` снимает последнюю пачку
+целиком. **Откат на боевой базе — крайняя мера**: он удаляет колонки вместе с данными.
+
+Миграция выполняется в транзакции. В SQLite это даёт настоящую атомарность, в MySQL
+каждый `ALTER` коммитится сам, зато запись о наполовину применённой миграции в
+`migrations` не появится. Ошибка любой миграции дополняется её именем.
+
+Шаг схемы знает, когда он уже выполнен (`Schema\Operation`): колонка добавляется, если
+её нет, индекс строится, если его нет, и так далее. Поэтому миграция, упавшая на
+середине в MySQL, доезжает следующим `migrate`, а не упирается в «Duplicate column
+name» — раньше такую базу чинили руками. Пропущенные шаги команда печатает списком.
+**Шаг с данными идемпотентным не станет сам**: перенос пишется так, чтобы повтор
+ничего не задвоил (в `20260821122257_webhook_subscriptions` уже перенесённые проекты
+отсекаются join'ом с целевой таблицей).
+
+Накат и откат идут под общей блокировкой (`Storage\Lock`: `GET_LOCK` в MySQL, `flock`
+на файле в `var/lock` — в SQLite). Два процесса разом — это дважды применённая
+миграция: между проверкой «применена?» и записью о ней успевает влезть второй.
+
 ## 6. HTTP API (v1)
 
 Авторизация: `Authorization: Bearer <api-key>`; ключ выпускается командой
@@ -358,7 +399,9 @@ API это не касается — там ключ в заголовке, а �
 ## 8. Команды CLI
 
 ```
-php bin/mailer migrate               применить миграции
+php bin/mailer migrate [--pretend]   применить миграции (--pretend — только показать запросы)
+php bin/mailer migrate:status        что применено, что ждёт, чего нет в коде
+php bin/mailer migrate:rollback [--steps=1]   откатить последнюю пачку миграций
 php bin/mailer seed                  базовые данные (транспорты, шаблоны)
 php bin/mailer worker [--once]       воркер очереди
 php bin/mailer worker:restart        пометка в settings: воркер доработает пачку и выйдет

@@ -8,6 +8,7 @@ declare(strict_types=1);
  * @var string $driver
  * @var array<string, string> $dbInfo
  * @var array<int, string> $pending
+ * @var array<int, string> $unknownMigrations
  * @var bool $hasKey
  * @var array<string, mixed> $config
  * @var array<int, array<string, mixed>> $counters
@@ -36,6 +37,9 @@ use Mailer\Ui\View;
                     <span class="badge sent">все применены</span>
                 <?php } else { ?>
                     <span class="badge failed">ждут: <?= View::e(implode(', ', $pending)) ?></span>
+                <?php } ?>
+                <?php if ($unknownMigrations !== []) { ?>
+                    <br><span class="badge failed">в базе есть, а в коде нет: <?= View::e(implode(', ', $unknownMigrations)) ?></span>
                 <?php } ?>
             </dd>
             <dt>Шифрование паролей</dt>

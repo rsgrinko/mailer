@@ -361,6 +361,67 @@ final class Database
     }
 
     /**
+     * Есть ли колонка в таблице. Нужно миграциям: код может приехать раньше них.
+     */
+    public function hasColumn(string $table, string $column): bool
+    {
+        if (!$this->hasTable($table)) {
+            return false;
+        }
+
+        if ($this->isSqlite()) {
+            // Имя таблицы в PRAGMA параметром не подставить, поэтому сверяем его сами
+            if (preg_match('/^[A-Za-z0-9_]+$/', $table) !== 1) {
+                throw new StorageException('Недопустимое имя таблицы: ' . $table);
+            }
+
+            foreach ($this->select('PRAGMA table_info(' . $table . ')') as $row) {
+                if ((string) $row['name'] === $column) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $row = $this->selectOne(
+            'SELECT column_name FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = :table AND column_name = :column',
+            ['table' => $table, 'column' => $column]
+        );
+
+        return $row !== null;
+    }
+
+    /**
+     * Есть ли индекс с таким именем. Полнотекстовый в MySQL считается тоже.
+     */
+    public function hasIndex(string $table, string $index): bool
+    {
+        if (!$this->hasTable($table)) {
+            return false;
+        }
+
+        if ($this->isSqlite()) {
+            $row = $this->selectOne(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND name = :index AND tbl_name = :table",
+                ['index' => $index, 'table' => $table]
+            );
+
+            return $row !== null;
+        }
+
+        $row = $this->selectOne(
+            'SELECT index_name FROM information_schema.STATISTICS
+                WHERE table_schema = DATABASE() AND table_name = :table AND index_name = :index
+                LIMIT 1',
+            ['table' => $table, 'index' => $index]
+        );
+
+        return $row !== null;
+    }
+
+    /**
      * Текущее время в формате, в котором мы храним даты.
      */
     public static function now(): string

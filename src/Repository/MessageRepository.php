@@ -253,11 +253,7 @@ final class MessageRepository
         }
 
         if ($available === null) {
-            $available = (int) $this->db->value(
-                'SELECT COUNT(*) FROM information_schema.STATISTICS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND INDEX_NAME = :index',
-                ['table' => 'messages', 'index' => 'ft_messages_search']
-            ) > 0;
+            $available = $this->db->hasIndex('messages', 'ft_messages_search');
         }
 
         return $available;

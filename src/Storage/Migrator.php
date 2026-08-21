@@ -4,19 +4,55 @@ declare(strict_types=1);
 
 namespace Mailer\Storage;
 
-use Mailer\Domain\Permission;
+use Mailer\Storage\Schema\Blueprint;
+use Mailer\Storage\Schema\Builder;
+use Throwable;
 
 /**
- * Миграции. Список запросов лежит прямо здесь: их немного, зато всё видно в одном месте.
- * Уже применённые миграции запоминаются в таблице migrations.
+ * Миграции. Каждая — свой файл в каталоге migrations/ у корня проекта:
+ * `20260821122257_webhook_subscriptions.php` с классом `WebhookSubscriptions`.
+ * Файлы подхватываются сами, реестр править не нужно, порядок — по имени файла,
+ * то есть по времени создания.
+ *
+ * Применённые запоминаются в таблице migrations вместе с номером пачки:
+ * `migrate` кладёт всё применённое за раз в одну пачку, `migrate:rollback`
+ * откатывает последнюю пачку целиком.
  */
 final class Migrator
 {
-    private Database $db;
+    /**
+     * Имена первых десяти миграций до перехода на файлы с отметкой времени.
+     * На боевой базе они уже применены — переименовываем записи, иначе миграции
+     * пойдут по второму разу и упадут на существующих таблицах.
+     */
+    /** Имя общей блокировки и сколько ждать её освобождения */
+    private const LOCK_NAME    = 'mailer_migrations';
+    private const LOCK_TIMEOUT = 60;
 
-    public function __construct(?Database $db = null)
+    private const LEGACY_NAMES = [
+        '0001_init'                  => '20260818152758_init',
+        '0002_users'                 => '20260819160402_users',
+        '0003_message_indexes'       => '20260819220045_message_indexes',
+        '0004_message_fulltext'      => '20260819225022_message_fulltext',
+        '0005_message_sender'        => '20260820162214_message_sender',
+        '0006_access'                => '20260820173127_access',
+        '0007_audit'                 => '20260820232541_audit',
+        '0008_suppressions'          => '20260820232542_suppressions',
+        '0009_unsubscribe'           => '20260820232543_unsubscribe',
+        '0010_webhook_subscriptions' => '20260821122257_webhook_subscriptions',
+    ];
+
+    private Database $db;
+    private string $path;
+    private ?Builder $builder = null;
+
+    /** @var array<string, Migration>|null */
+    private ?array $migrations = null;
+
+    public function __construct(?Database $db = null, ?string $path = null)
     {
-        $this->db = $db ?? Database::instance();
+        $this->db   = $db ?? Database::instance();
+        $this->path = $path ?? MAILER_ROOT . '/migrations';
     }
 
     /**
@@ -26,27 +62,111 @@ final class Migrator
      */
     public function run(): array
     {
-        $this->createMigrationsTable();
+        return $this->locked(function (): array {
+            $this->prepare();
 
-        $applied = [];
-        foreach ($this->migrations() as $name => $statements) {
-            if ($this->isApplied($name)) {
-                continue;
+            $pending = $this->pending();
+            if ($pending === []) {
+                return [];
             }
 
-            foreach ($statements as $sql) {
-                $this->db->execute($sql);
+            $batch   = $this->nextBatch();
+            $applied = [];
+
+            foreach ($pending as $name) {
+                $migration = $this->migrations()[$name];
+
+                $this->guard($name, function () use ($migration, $name, $batch) {
+                    // В SQLite DDL транзакционен, и упавшая миграция откатится целиком.
+                    // MySQL на каждом ALTER делает неявный коммит — там транзакция не спасёт,
+                    // зато записи о наполовину применённой миграции в migrations не появится,
+                    // и следующий накат повторит её шаги, пропустив уже сделанные.
+                    $this->db->transaction(function () use ($migration, $name, $batch) {
+                        $migration->up();
+
+                        $this->db->insert('migrations', [
+                            'name'       => $name,
+                            'batch'      => $batch,
+                            'applied_at' => Database::now(),
+                        ]);
+                    });
+                });
+
+                $applied[] = $name;
             }
 
-            $this->db->insert('migrations', [
-                'name'       => $name,
-                'applied_at' => Database::now(),
-            ]);
+            return $applied;
+        });
+    }
 
-            $applied[] = $name;
+    /**
+     * Откатывает последние пачки миграций. Возвращает список откаченных имён
+     * в порядке отката — начиная с самой поздней.
+     *
+     * @return array<int, string>
+     */
+    public function rollback(int $batches = 1): array
+    {
+        if (!$this->db->hasTable('migrations')) {
+            return [];
         }
 
-        return $applied;
+        return $this->locked(function () use ($batches): array {
+            $this->prepare();
+
+            $names = $this->lastBatches(max(1, $batches));
+            if ($names === []) {
+                return [];
+            }
+
+            $known      = $this->migrations();
+            $rolledBack = [];
+
+            foreach ($names as $name) {
+                if (!isset($known[$name])) {
+                    throw new StorageException(
+                        'Миграция ' . $name . ' есть в базе, но не в коде — откатить её нечем.'
+                    );
+                }
+
+                $migration = $known[$name];
+
+                $this->guard($name, function () use ($migration, $name) {
+                    $this->db->transaction(function () use ($migration, $name) {
+                        $migration->down();
+                        $this->db->execute('DELETE FROM migrations WHERE name = :name', ['name' => $name]);
+                    });
+                });
+
+                $rolledBack[] = $name;
+            }
+
+            return $rolledBack;
+        });
+    }
+
+    /**
+     * Что сделают новые миграции, если их применить: имя -> список запросов.
+     * Ничего не выполняет — это `migrate --pretend`.
+     *
+     * @return array<string, array<int, string>>
+     */
+    public function pretend(): array
+    {
+        $plan = [];
+
+        foreach ($this->pending() as $name) {
+            $builder = new Builder($this->db, true);
+            $class   = get_class($this->migrations()[$name]);
+
+            /** @var Migration $migration */
+            $migration = new $class($builder);
+            $migration->up();
+
+            $plan[$name] = $builder->log();
+        }
+
+        return $plan;
     }
 
     /**
@@ -56,562 +176,223 @@ final class Migrator
      */
     public function pending(): array
     {
+        $applied = $this->applied();
+
+        return array_values(array_diff(array_keys($this->migrations()), $applied));
+    }
+
+    /**
+     * Имена применённых миграций в порядке применения.
+     *
+     * @return array<int, string>
+     */
+    public function applied(): array
+    {
         if (!$this->db->hasTable('migrations')) {
-            return array_keys($this->migrations());
-        }
-
-        $pending = [];
-        foreach (array_keys($this->migrations()) as $name) {
-            if (!$this->isApplied($name)) {
-                $pending[] = $name;
-            }
-        }
-
-        return $pending;
-    }
-
-    private function isApplied(string $name): bool
-    {
-        return $this->db->selectOne('SELECT name FROM migrations WHERE name = :name', ['name' => $name]) !== null;
-    }
-
-    private function createMigrationsTable(): void
-    {
-        $this->db->execute(
-            'CREATE TABLE IF NOT EXISTS migrations ('
-            . 'name ' . $this->str(191) . ' NOT NULL PRIMARY KEY, '
-            . 'applied_at ' . $this->dt() . ' NOT NULL'
-            . ')' . $this->tableSuffix()
-        );
-    }
-
-    /**
-     * Все миграции сервиса.
-     *
-     * @return array<string, array<int, string>>
-     */
-    private function migrations(): array
-    {
-        return [
-            '0001_init'  => $this->initialSchema(),
-            '0002_users' => $this->usersSchema(),
-            '0003_message_indexes' => $this->messageIndexes(),
-            '0004_message_fulltext' => $this->messageFulltext(),
-            '0005_message_sender' => $this->messageSender(),
-            '0006_access' => $this->accessSchema(),
-            '0007_audit' => $this->auditSchema(),
-            '0008_suppressions' => $this->suppressionsSchema(),
-            '0009_unsubscribe' => $this->unsubscribeSchema(),
-            '0010_webhook_subscriptions' => $this->webhookSchema(),
-        ];
-    }
-
-    /**
-     * Подписки на события вместо одного адреса у проекта и подробности доставок.
-     *
-     * Раньше вебхук был один на проект (колонки projects.webhook_url и
-     * webhook_secret) и слал ровно два события. Теперь адресов может быть
-     * сколько угодно, у каждого свой секрет и свой набор событий.
-     *
-     * Старые колонки в projects не трогаем: база боевая, а данные из них
-     * переезжают копией. Перенесённая подписка получает payload_version = 1 —
-     * прежний плоский формат тела и прежние имена событий, чтобы у тех, кто уже
-     * принимает наши вебхуки, ничего не сломалось.
-     *
-     * Секрет переносится как есть, без шифрования: миграции — это чистый SQL,
-     * а Crypto::decrypt() понимает и незашифрованное значение. Перезаписанный
-     * в панели секрет ляжет уже зашифрованным.
-     *
-     * @return array<int, string>
-     */
-    private function webhookSchema(): array
-    {
-        $id   = $this->id();
-        $str  = fn (int $length = 191): string => $this->str($length);
-        $text = $this->text();
-        $long = $this->longText();
-        $int  = $this->int();
-        $dt   = $this->dt();
-        $end  = $this->tableSuffix();
-        $now  = Database::now();
-
-        return [
-            "CREATE TABLE IF NOT EXISTS project_webhooks (
-                id {$id},
-                project_id {$int} NOT NULL,
-                name {$str(191)} NULL,
-                url {$str(500)} NOT NULL,
-                secret {$str(500)} NULL,
-                events {$text} NULL,
-                payload_version {$int} NOT NULL DEFAULT 2,
-                active {$int} NOT NULL DEFAULT 1,
-                failures {$int} NOT NULL DEFAULT 0,
-                last_status {$str(20)} NULL,
-                last_error {$text} NULL,
-                last_delivery_at {$dt} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $this->index('idx_project_webhooks_project', 'project_webhooks', 'project_id, active'),
-
-            // Прежние вебхуки проектов переезжают как есть
-            "INSERT INTO project_webhooks (project_id, name, url, secret, events, payload_version, active, created_at, updated_at)
-                SELECT id, 'Вебхук проекта', webhook_url, webhook_secret, NULL, 1, 1, '{$now}', '{$now}'
-                FROM projects WHERE webhook_url IS NOT NULL AND webhook_url <> ''",
-
-            // Доставка: что именно ушло и что ответили. Без этого отладить вебхук нечем
-            "ALTER TABLE webhook_deliveries ADD COLUMN uuid {$str(36)} NULL",
-            "ALTER TABLE webhook_deliveries ADD COLUMN subscription_id {$int} NULL",
-            "ALTER TABLE webhook_deliveries ADD COLUMN request_headers {$text} NULL",
-            "ALTER TABLE webhook_deliveries ADD COLUMN response_headers {$text} NULL",
-            "ALTER TABLE webhook_deliveries ADD COLUMN response_body {$long} NULL",
-            "ALTER TABLE webhook_deliveries ADD COLUMN duration_ms {$int} NULL",
-
-            $this->index('idx_webhooks_uuid', 'webhook_deliveries', 'uuid'),
-            $this->index('idx_webhooks_event', 'webhook_deliveries', 'event, id'),
-            $this->index('idx_webhooks_subscription', 'webhook_deliveries', 'subscription_id, id'),
-        ];
-    }
-    /**
-     * Отписка одной кнопкой у проекта. Ноль — заголовки отписки в его письма не ставим:
-     * служебному письму про сброс пароля кнопка «отписаться» ни к чему, а массовой
-     * рассылке без неё закроют дорогу Gmail и Mail.ru.
-     *
-     * @return array<int, string>
-     */
-    private function unsubscribeSchema(): array
-    {
-        return [
-            'ALTER TABLE projects ADD COLUMN unsubscribe ' . $this->int() . ' NOT NULL DEFAULT 0',
-        ];
-    }
-
-    /**
-     * Стоп-лист адресов: кому больше не пишем. Сюда попадают отказы почтовых серверов,
-     * жалобы на спам и отписки, а руками — всё остальное.
-     *
-     * `project_id` пустой — адрес закрыт для всех проектов: несуществующего ящика
-     * не существует ни для кого. Заполненный ограничивает запрет одним проектом:
-     * отписка от рассылки одного приложения не должна отменять письма другого.
-     *
-     * `expires_at` — для мягких отказов вроде «ящик переполнен»: через срок адрес
-     * снова разблокируется сам.
-     *
-     * @return array<int, string>
-     */
-    private function suppressionsSchema(): array
-    {
-        $id   = $this->id();
-        $str  = fn (int $length = 191): string => $this->str($length);
-        $text = $this->text();
-        $int  = $this->int();
-        $dt   = $this->dt();
-        $end  = $this->tableSuffix();
-
-        return [
-            "CREATE TABLE IF NOT EXISTS suppressions (
-                id {$id},
-                email {$str(191)} NOT NULL,
-                project_id {$int} NULL,
-                owner_id {$int} NOT NULL DEFAULT 0,
-                reason {$str(32)} NOT NULL,
-                source {$str(32)} NOT NULL,
-                message_id {$int} NULL,
-                note {$text} NULL,
-                expires_at {$dt} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $this->index('idx_suppressions_email', 'suppressions', 'email'),
-            $this->index('idx_suppressions_project', 'suppressions', 'project_id'),
-            $this->index('idx_suppressions_owner', 'suppressions', 'owner_id, created_at'),
-        ];
-    }
-
-    /**
-     * Журнал действий в панели. Кто, что и над какой записью сделал — по логам такое
-     * не восстановить: там нет ни пользователя, ни того, что именно поменялось.
-     *
-     * Логин пишем строкой рядом с id: пользователя могут удалить, а запись в журнале
-     * должна остаться читаемой.
-     *
-     * @return array<int, string>
-     */
-    private function auditSchema(): array
-    {
-        $id   = $this->id();
-        $str  = fn (int $length = 191): string => $this->str($length);
-        $text = $this->text();
-        $int  = $this->int();
-        $dt   = $this->dt();
-        $end  = $this->tableSuffix();
-
-        return [
-            "CREATE TABLE IF NOT EXISTS audit_log (
-                id {$id},
-                user_id {$int} NOT NULL DEFAULT 0,
-                user_login {$str(191)} NULL,
-                action {$str(64)} NOT NULL,
-                entity {$str(64)} NOT NULL,
-                entity_id {$int} NULL,
-                summary {$text} NULL,
-                ip {$str(64)} NULL,
-                created_at {$dt} NOT NULL
-            ){$end}",
-            $this->index('idx_audit_created', 'audit_log', 'created_at'),
-            $this->index('idx_audit_user', 'audit_log', 'user_id, created_at'),
-            $this->index('idx_audit_entity', 'audit_log', 'entity, entity_id'),
-        ];
-    }
-    /**
-     * Роли и владельцы записей. До неё в панели все были равны и видели всё.
-     *
-     * Владелец — `owner_id`, ноль означает «ничьё»: так помечены записи, заведённые
-     * до разделения прав, и их видит только тот, у кого есть право data.all.
-     * Транспортам такие записи заодно ставим `shared = 1` — иначе после миграции
-     * обычный пользователь останется без единого способа отправки.
-     *
-     * У писем владелец свой, а не через проект: письмо из панели проекта может не иметь
-     * вовсе, а искать владельца подзапросом на каждом списке — лишняя работа для базы.
-     *
-     * @return array<int, string>
-     */
-    private function accessSchema(): array
-    {
-        $id   = $this->id();
-        $str  = fn (int $length = 191): string => $this->str($length);
-        $text = $this->text();
-        $int  = $this->int();
-        $dt   = $this->dt();
-        $end  = $this->tableSuffix();
-
-        $admin = json_encode(Permission::admin());
-        $user  = json_encode(Permission::user());
-        $now   = Database::now();
-
-        return [
-            "CREATE TABLE IF NOT EXISTS roles (
-                id {$id},
-                name {$str(191)} NOT NULL,
-                description {$text} NULL,
-                permissions {$text} NOT NULL,
-                is_system {$int} NOT NULL DEFAULT 0,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $this->index('idx_roles_name', 'roles', 'name', true),
-
-            "INSERT INTO roles (name, description, permissions, is_system, created_at, updated_at)
-                VALUES ('Администратор', 'Полный доступ ко всем данным и настройкам сервиса', '{$admin}', 1, '{$now}', '{$now}')",
-            "INSERT INTO roles (name, description, permissions, is_system, created_at, updated_at)
-                VALUES ('Пользователь', 'Свои проекты, транспорты, шаблоны и письма', '{$user}', 0, '{$now}', '{$now}')",
-
-            "ALTER TABLE users ADD COLUMN role_id {$int} NULL",
-            "ALTER TABLE projects ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
-            "ALTER TABLE transports ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
-            "ALTER TABLE transports ADD COLUMN shared {$int} NOT NULL DEFAULT 0",
-            "ALTER TABLE templates ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
-            "ALTER TABLE messages ADD COLUMN owner_id {$int} NOT NULL DEFAULT 0",
-
-            $this->index('idx_projects_owner', 'projects', 'owner_id'),
-            $this->index('idx_transports_owner', 'transports', 'owner_id'),
-            $this->index('idx_templates_owner', 'templates', 'owner_id'),
-            $this->index('idx_messages_owner', 'messages', 'owner_id, created_at'),
-
-            // Те, кто уже работал в панели, ничего не теряют
-            "UPDATE users SET role_id = (SELECT id FROM roles WHERE name = 'Администратор')",
-            'UPDATE transports SET shared = 1',
-        ];
-    }
-
-    /**
-     * Адрес, с которого письмо ушло на самом деле. В `from_email` лежит то, что прислал
-     * клиент, а транспорт с `force_from` подменяет отправителя уже на отправке —
-     * без отдельной колонки в карточке письма не понять, почему адрес не тот.
-     *
-     * @return array<int, string>
-     */
-    private function messageSender(): array
-    {
-        return [
-            'ALTER TABLE messages ADD COLUMN sender_used ' . $this->str(191) . ' NULL',
-        ];
-    }
-
-    /**
-     * Полнотекстовый индекс для поиска по письмам. Есть только в MySQL —
-     * в SQLite полнотекста нет, там поиск остаётся на LIKE (см. MessageRepository).
-     *
-     * @return array<int, string>
-     */
-    private function messageFulltext(): array
-    {
-        if ($this->db->isSqlite()) {
             return [];
         }
 
-        return [
-            'ALTER TABLE messages ADD FULLTEXT INDEX ft_messages_search (subject, to_json, from_email)',
-        ];
+        $rows = $this->db->select('SELECT name FROM migrations ORDER BY name');
+
+        return array_map(static fn (array $row): string => (string) $row['name'], $rows);
     }
 
     /**
-     * Индексы под запросы дашборда и списков. Без них при десятках тысяч писем
-     * обзор считался сотнями миллисекунд: «отправлено сегодня», «ошибок сегодня»,
-     * график за две недели и самое старое письмо в очереди шли полным перебором.
+     * Шаги последнего наката, пропущенные как уже выполненные. Так выглядит докат
+     * миграции, упавшей на середине: часть её изменений в базе уже была.
      *
      * @return array<int, string>
      */
-    private function messageIndexes(): array
+    public function skipped(): array
     {
-        return [
-            $this->index('idx_messages_status_sent', 'messages', 'status, sent_at'),
-            $this->index('idx_messages_status_updated', 'messages', 'status, updated_at'),
-            $this->index('idx_messages_status_created', 'messages', 'status, created_at'),
-            $this->index('idx_messages_created_status', 'messages', 'created_at, status'),
-        ];
+        return $this->builder === null ? [] : $this->builder->skipped();
     }
 
     /**
-     * Пользователи панели. Появились позже остальных таблиц, поэтому отдельной миграцией.
+     * Миграции, которые есть в базе, но которых нет в коде: обычно это откат
+     * релиза. Молча игнорировать такое нельзя — панель показывает расхождение.
      *
      * @return array<int, string>
      */
-    private function usersSchema(): array
+    public function unknown(): array
     {
-        $id  = $this->id();
-        $str = fn (int $length = 191): string => $this->str($length);
-        $int = $this->int();
-        $dt  = $this->dt();
-        $end = $this->tableSuffix();
-
-        return [
-            "CREATE TABLE IF NOT EXISTS users (
-                id {$id},
-                login {$str(191)} NOT NULL,
-                name {$str(191)} NULL,
-                password_hash {$str(191)} NOT NULL,
-                active {$int} NOT NULL DEFAULT 1,
-                last_login_at {$dt} NULL,
-                last_login_ip {$str(64)} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $this->index('idx_users_login', 'users', 'login', true),
-        ];
+        return array_values(array_diff($this->applied(), array_keys($this->migrations())));
     }
 
     /**
+     * Все миграции сервиса: имя файла без расширения -> объект.
+     *
+     * @return array<string, Migration>
+     */
+    public function migrations(): array
+    {
+        if ($this->migrations !== null) {
+            return $this->migrations;
+        }
+
+        $builder = $this->builder = new Builder($this->db);
+        $found   = [];
+
+        foreach ((array) glob($this->path . '/*.php') as $file) {
+            $file = (string) $file;
+            $name = basename($file, '.php');
+
+            if (preg_match('/^(\d{14})_([a-z0-9_]+)$/', $name, $matches) !== 1) {
+                throw new StorageException(
+                    'Файл миграции ' . $name . ' назван не по правилу 20260821122257_имя_миграции.php'
+                );
+            }
+
+            $class = $this->className($matches[2]);
+
+            require_once $file;
+
+            if (!class_exists($class) || !is_subclass_of($class, Migration::class)) {
+                throw new StorageException(
+                    'В файле миграции ' . $name . ' нет класса ' . $class . ', унаследованного от Migration.'
+                );
+            }
+
+            $found[$name] = new $class($builder);
+        }
+
+        ksort($found);
+
+        return $this->migrations = $found;
+    }
+
+    /**
+     * Класс миграции по хвосту имени файла: message_indexes -> MessageIndexes.
+     */
+    private function className(string $slug): string
+    {
+        return 'Mailer\\Migrations\\' . str_replace(' ', '', ucwords(str_replace('_', ' ', $slug)));
+    }
+
+    /**
+     * Выполняет работу с базой под общей блокировкой: два наката разом — это
+     * дважды применённая миграция, а на проде обычно ещё и упавший деплой.
+     *
+     * @template T
+     * @param callable(): T $work
+     * @return T
+     */
+    private function locked(callable $work): mixed
+    {
+        $lock = new Lock($this->db, self::LOCK_NAME);
+
+        if (!$lock->acquire(self::LOCK_TIMEOUT)) {
+            throw new StorageException(
+                'Миграции уже накатывает другой процесс. Дождитесь его и повторите.'
+            );
+        }
+
+        try {
+            return $work();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Выполняет шаг миграции, дополняя любую ошибку её именем: без этого на проде
+     * приходится гадать, на чём именно встал накат.
+     */
+    private function guard(string $name, callable $step): void
+    {
+        try {
+            $step();
+        } catch (Throwable $e) {
+            throw new StorageException(
+                'Миграция ' . $name . ' не выполнена: ' . $e->getMessage(),
+                [],
+                0,
+                $e
+            );
+        }
+    }
+
+    /**
+     * Имена миграций последних пачек, в порядке отката.
+     *
      * @return array<int, string>
      */
-    private function initialSchema(): array
+    private function lastBatches(int $batches): array
     {
-        $id   = $this->id();
-        $str  = fn (int $length = 191): string => $this->str($length);
-        $text = $this->text();
-        $long = $this->longText();
-        $int  = $this->int();
-        $dt   = $this->dt();
-        $end  = $this->tableSuffix();
-        $idx  = fn (string $name, string $table, string $columns, bool $unique = false): string
-            => $this->index($name, $table, $columns, $unique);
+        $rows = $this->db->select(
+            'SELECT DISTINCT batch FROM migrations ORDER BY batch DESC LIMIT ' . $batches
+        );
 
-        return [
-            // Проекты — это клиенты нашего API. У каждого свой ключ и свои лимиты.
-            "CREATE TABLE IF NOT EXISTS projects (
-                id {$id},
-                name {$str(191)} NOT NULL,
-                description {$text} NULL,
-                api_key_prefix {$str(32)} NOT NULL,
-                api_key_hash {$str(191)} NOT NULL,
-                transport_id {$int} NULL,
-                default_from_email {$str(191)} NULL,
-                default_from_name {$str(191)} NULL,
-                rate_limit_hour {$int} NOT NULL DEFAULT 0,
-                rate_limit_day {$int} NOT NULL DEFAULT 0,
-                webhook_url {$str(500)} NULL,
-                webhook_secret {$str(191)} NULL,
-                active {$int} NOT NULL DEFAULT 1,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_projects_name', 'projects', 'name', true),
-            $idx('idx_projects_prefix', 'projects', 'api_key_prefix', true),
+        if ($rows === []) {
+            return [];
+        }
 
-            // Транспорты — способы отправки: smtp, sendmail, log, null, failover, roundrobin.
-            "CREATE TABLE IF NOT EXISTS transports (
-                id {$id},
-                name {$str(191)} NOT NULL,
-                type {$str(32)} NOT NULL,
-                settings {$text} NOT NULL,
-                from_email {$str(191)} NULL,
-                from_name {$str(191)} NULL,
-                priority {$int} NOT NULL DEFAULT 100,
-                daily_limit {$int} NOT NULL DEFAULT 0,
-                is_default {$int} NOT NULL DEFAULT 0,
-                active {$int} NOT NULL DEFAULT 1,
-                last_used_at {$dt} NULL,
-                last_error {$text} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_transports_name', 'transports', 'name', true),
+        $lowest = (int) $rows[count($rows) - 1]['batch'];
 
-            // Письма. Тут же лежит история попыток отправки.
-            "CREATE TABLE IF NOT EXISTS messages (
-                id {$id},
-                uuid {$str(36)} NOT NULL,
-                project_id {$int} NULL,
-                transport_id {$int} NULL,
-                transport_used {$str(191)} NULL,
-                status {$str(20)} NOT NULL DEFAULT 'queued',
-                priority {$int} NOT NULL DEFAULT 100,
-                source {$str(20)} NOT NULL DEFAULT 'api',
-                subject {$str(500)} NULL,
-                from_email {$str(191)} NULL,
-                from_name {$str(191)} NULL,
-                reply_to {$str(191)} NULL,
-                to_json {$text} NULL,
-                cc_json {$text} NULL,
-                bcc_json {$text} NULL,
-                headers_json {$text} NULL,
-                text_body {$long} NULL,
-                html_body {$long} NULL,
-                attachments_json {$text} NULL,
-                raw_mime {$long} NULL,
-                envelope_from {$str(191)} NULL,
-                envelope_to {$text} NULL,
-                template {$str(191)} NULL,
-                template_data {$text} NULL,
-                meta {$text} NULL,
-                tag {$str(191)} NULL,
-                idempotency_key {$str(191)} NULL,
-                size {$int} NOT NULL DEFAULT 0,
-                attempts {$int} NOT NULL DEFAULT 0,
-                max_attempts {$int} NOT NULL DEFAULT 5,
-                available_at {$dt} NULL,
-                locked_at {$dt} NULL,
-                locked_by {$str(64)} NULL,
-                last_error {$text} NULL,
-                sent_at {$dt} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_messages_uuid', 'messages', 'uuid', true),
-            $idx('idx_messages_queue', 'messages', 'status, available_at'),
-            $idx('idx_messages_project', 'messages', 'project_id, created_at'),
-            $idx('idx_messages_created', 'messages', 'created_at'),
-            $idx('idx_messages_idem', 'messages', 'project_id, idempotency_key'),
+        $names = $this->db->select(
+            'SELECT name FROM migrations WHERE batch >= :batch ORDER BY name DESC',
+            ['batch' => $lowest]
+        );
 
-            // Что происходило с письмом: принято, попытка, ошибка, отправлено.
-            "CREATE TABLE IF NOT EXISTS message_events (
-                id {$id},
-                message_id {$int} NOT NULL,
-                type {$str(32)} NOT NULL,
-                message {$text} NULL,
-                meta {$text} NULL,
-                created_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_events_message', 'message_events', 'message_id, id'),
-
-            // Шаблоны писем с переменными {{ name }}.
-            "CREATE TABLE IF NOT EXISTS templates (
-                id {$id},
-                name {$str(191)} NOT NULL,
-                description {$text} NULL,
-                subject {$str(500)} NULL,
-                html {$long} NULL,
-                text {$long} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_templates_name', 'templates', 'name', true),
-
-            // Очередь вебхуков: сообщаем проекту, что случилось с письмом.
-            "CREATE TABLE IF NOT EXISTS webhook_deliveries (
-                id {$id},
-                message_id {$int} NULL,
-                project_id {$int} NULL,
-                url {$str(500)} NOT NULL,
-                event {$str(32)} NOT NULL,
-                payload {$text} NOT NULL,
-                status {$str(20)} NOT NULL DEFAULT 'queued',
-                attempts {$int} NOT NULL DEFAULT 0,
-                response_code {$int} NULL,
-                last_error {$text} NULL,
-                available_at {$dt} NULL,
-                delivered_at {$dt} NULL,
-                created_at {$dt} NOT NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-            $idx('idx_webhooks_queue', 'webhook_deliveries', 'status, available_at'),
-
-            // Счётчики для лимитов отправки.
-            "CREATE TABLE IF NOT EXISTS counters (
-                counter_key {$str(191)} NOT NULL PRIMARY KEY,
-                value {$int} NOT NULL DEFAULT 0,
-                expires_at {$dt} NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-
-            // Служебные значения: heartbeat воркера, версия и т.п.
-            "CREATE TABLE IF NOT EXISTS settings (
-                setting_key {$str(191)} NOT NULL PRIMARY KEY,
-                value {$text} NULL,
-                updated_at {$dt} NOT NULL
-            ){$end}",
-        ];
+        return array_map(static fn (array $row): string => (string) $row['name'], $names);
     }
 
-    // --- Типы колонок под конкретный драйвер ---------------------------------
+    private function nextBatch(): int
+    {
+        return (int) $this->db->value('SELECT MAX(batch) FROM migrations') + 1;
+    }
 
     /**
-     * SQL создания индекса. SQLite умеет IF NOT EXISTS, MySQL — нет,
-     * но миграция выполняется один раз, так что для MySQL пишем без него.
+     * Служебная таблица в актуальном виде: создать, если её нет, дополнить,
+     * если она осталась от прежних версий.
      */
-    private function index(string $name, string $table, string $columns, bool $unique = false): string
+    private function prepare(): void
     {
-        $unique = $unique ? 'UNIQUE ' : '';
+        $schema = new Builder($this->db);
 
-        return $this->db->isSqlite()
-            ? "CREATE {$unique}INDEX IF NOT EXISTS {$name} ON {$table} ({$columns})"
-            : "CREATE {$unique}INDEX {$name} ON {$table} ({$columns})";
+        if (!$this->db->hasTable('migrations')) {
+            $schema->create('migrations', function (Blueprint $table) {
+                $table->string('name')->primary();
+                $table->integer('batch')->default(0);
+                $table->dateTime('applied_at');
+            });
+
+            return;
+        }
+
+        // База, накатанная до появления пачек: колонки batch там ещё нет
+        if (!$this->db->hasColumn('migrations', 'batch')) {
+            $schema->table('migrations', function (Blueprint $table) {
+                $table->integer('batch')->default(0);
+            });
+        }
+
+        $this->renameLegacy();
     }
 
-    private function id(): string
+    /**
+     * Переводит записи о старых миграциях (0001_init) на новые имена файлов.
+     * Выполняется один раз: после переименования старых имён в таблице нет.
+     */
+    private function renameLegacy(): void
     {
-        return $this->db->isSqlite()
-            ? 'INTEGER PRIMARY KEY AUTOINCREMENT'
-            : 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY';
-    }
+        $applied = $this->applied();
 
-    private function str(int $length): string
-    {
-        return $this->db->isSqlite() ? 'TEXT' : 'VARCHAR(' . $length . ')';
-    }
+        foreach (self::LEGACY_NAMES as $old => $new) {
+            if (!in_array($old, $applied, true)) {
+                continue;
+            }
 
-    private function text(): string
-    {
-        return $this->db->isSqlite() ? 'TEXT' : 'TEXT';
-    }
+            if (in_array($new, $applied, true)) {
+                // Обе записи разом — новое имя уже есть, старому взяться неоткуда
+                $this->db->execute('DELETE FROM migrations WHERE name = :name', ['name' => $old]);
+                continue;
+            }
 
-    private function longText(): string
-    {
-        return $this->db->isSqlite() ? 'TEXT' : 'LONGTEXT';
-    }
-
-    private function int(): string
-    {
-        return $this->db->isSqlite() ? 'INTEGER' : 'BIGINT';
-    }
-
-    private function dt(): string
-    {
-        return $this->db->isSqlite() ? 'TEXT' : 'DATETIME';
-    }
-
-    private function tableSuffix(): string
-    {
-        return $this->db->isSqlite() ? '' : ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+            $this->db->execute(
+                'UPDATE migrations SET name = :new WHERE name = :old',
+                ['new' => $new, 'old' => $old]
+            );
+        }
     }
 }

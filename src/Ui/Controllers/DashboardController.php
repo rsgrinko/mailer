@@ -99,6 +99,7 @@ final class DashboardController
             'driver'    => $db->driver(),
             'dbInfo'    => $this->databaseInfo($db),
             'pending'   => $migrator->pending(),
+            'unknownMigrations' => $migrator->unknown(),
             'hasKey'    => Crypto::hasKey(),
             'config'    => $this->safeConfig(),
             'counters'  => $counters,
@@ -129,6 +130,11 @@ final class DashboardController
 
         switch ($action) {
             case 'migrate':
+                // Индекс по большой таблице строится минутами, а php-fpm обрывает
+                // запрос по max_execution_time — оборванный посреди ALTER накат чинить руками
+                set_time_limit(0);
+                ignore_user_abort(true);
+
                 $applied = (new Migrator($db))->run();
                 Audit::action('system', null, $applied === [] ? 'миграции: новых нет' : 'применены миграции: ' . implode(', ', $applied));
                 View::flash($applied === [] ? 'Новых миграций нет' : 'Применены миграции: ' . implode(', ', $applied));

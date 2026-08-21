@@ -10,7 +10,9 @@ declare(strict_types=1);
 test('в запросах нет повторяющихся именованных параметров', function (): void {
     $problems = [];
 
-    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(MAILER_ROOT . '/src'));
+    $files = new AppendIterator();
+    $files->append(new RecursiveIteratorIterator(new RecursiveDirectoryIterator(MAILER_ROOT . '/src')));
+    $files->append(new RecursiveIteratorIterator(new RecursiveDirectoryIterator(MAILER_ROOT . '/migrations')));
 
     foreach ($files as $file) {
         /** @var SplFileInfo $file */
