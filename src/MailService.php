@@ -87,6 +87,15 @@ final class MailService
         // Синхронный режим: отправляем прямо сейчас и возвращаем результат
         $sync = (bool) ($payload['sync'] ?? false);
         if ($sync && !$result['duplicate']) {
+            // Отправлять некому: все получатели закрыты стоп-листом. Письмо уже
+            // сохранено со статусом suppressed, захватывать его незачем
+            if ($result['status'] === MessageRepository::SUPPRESSED) {
+                return array_merge($result, [
+                    'info' => 'Все получатели в стоп-листе — письмо не отправляется',
+                    'sync' => true,
+                ]);
+            }
+
             $sent = $this->sendNow((int) $result['id']);
 
             return array_merge($result, [
@@ -111,8 +120,17 @@ final class MailService
             throw new MailerException('Письмо не найдено: id=' . $id, [], 404);
         }
 
-        if ((string) $row['status'] === MessageRepository::SENT) {
-            return ['status' => MessageRepository::SENT, 'info' => 'Письмо уже отправлено'];
+        // Письмо, с которым уже всё решено, отправлять не нужно, и «занято другим
+        // процессом» про него говорить нельзя: причина совсем другая
+        $settled = [
+            MessageRepository::SENT       => 'Письмо уже отправлено',
+            MessageRepository::SUPPRESSED => 'Все получатели в стоп-листе — отправлять некому',
+            MessageRepository::CANCELED   => 'Письмо отменено',
+        ];
+
+        $status = (string) $row['status'];
+        if (isset($settled[$status])) {
+            return ['status' => $status, 'info' => $settled[$status]];
         }
 
         // Забираем письмо себе тем же способом, что и воркер: иначе он возьмёт его

@@ -57,7 +57,10 @@ final class MessagesController
 
         $status = ($result['duplicate'] ?? false) ? 200 : 202;
         if (($result['sync'] ?? false) === true) {
-            $status = $result['status'] === MessageRepository::SENT ? 200 : 502;
+            // 502 — только когда письмо не взял почтовый сервер. Стоп-лист к нему
+            // отношения не имеет: сервис отработал как просили, отправлять было некому
+            $ok     = [MessageRepository::SENT, MessageRepository::SUPPRESSED];
+            $status = in_array($result['status'], $ok, true) ? 200 : 502;
         }
 
         return Response::json([

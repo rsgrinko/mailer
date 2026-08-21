@@ -35,7 +35,7 @@ function suppressionFixtures(): array
         'active'   => 1,
     ]);
 
-    $fixtures = ['project' => $created['project']];
+    $fixtures = ['project' => $created['project'], 'key' => (string) $created['key']];
 
     return $fixtures;
 }
@@ -89,6 +89,60 @@ test('письмо всем закрытым получателям не ухо�
     assertSame(MessageRepository::SUPPRESSED, (string) $row['status'], 'письмо не должно ждать в очереди');
 
     (new MessageRepository())->delete((int) $accepted['id']);
+    $list->delete($id);
+});
+
+test('синхронная отправка закрытому адресу отвечает по делу', function (): void {
+    $ids  = suppressionFixtures();
+    $list = new SuppressionRepository();
+    $id   = $list->block('sync-nobody@example.com');
+
+    // Раньше sync шёл захватывать письмо, которое уже никуда не поедет, и клиент
+    // получал 502 с «Письмо уже обработано другим процессом»
+    $accepted = (new MailService())->accept([
+        'to'        => 'sync-nobody@example.com',
+        'subject'   => 'Синхронно в никуда',
+        'text'      => 'Текст',
+        'transport' => 'стоп-лист-null',
+        'sync'      => true,
+    ], $ids['project']);
+
+    assertSame(MessageRepository::SUPPRESSED, (string) $accepted['status']);
+    assertTrue($accepted['sync'], 'ответ должен быть про синхронную отправку');
+    assertContains('стоп-лист', (string) $accepted['info']);
+
+    // И повторный запрос уже сохранённого письма отвечает тем же, а не «занято»
+    $again = (new MailService())->sendNow((int) $accepted['id']);
+
+    assertSame(MessageRepository::SUPPRESSED, $again['status']);
+    assertContains('некому', $again['info']);
+
+    // API такой ответ не считает ошибкой шлюза: сервис отработал как просили
+    $response = (new Mailer\Http\ApiKernel())->handle(httpRequest(
+        'POST',
+        '/api/v1/messages',
+        ['authorization' => 'Bearer ' . $ids['key']],
+        [
+            'to'        => 'sync-nobody@example.com',
+            'subject'   => 'Синхронно в никуда, через API',
+            'text'      => 'Текст',
+            'transport' => 'стоп-лист-null',
+            'sync'      => true,
+        ]
+    ));
+
+    assertSame(200, $response->status());
+
+    $answer = (array) json_decode($response->body(), true);
+    assertSame(MessageRepository::SUPPRESSED, $answer['status']);
+
+    $messages = new MessageRepository();
+    $second   = $messages->findAny((string) $answer['id']);
+
+    $messages->delete((int) $accepted['id']);
+    if ($second !== null) {
+        $messages->delete((int) $second['id']);
+    }
     $list->delete($id);
 });
 
