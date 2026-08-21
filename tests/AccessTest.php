@@ -110,8 +110,16 @@ function accessFixtures(): array
         'sync'      => true,
     ], $created['project']);
 
+    // Вебхук чужого проекта: ни в списке, ни в карточке его быть не должно
+    $subscription = (new Mailer\Repository\WebhookSubscriptionRepository())->create([
+        'project_id' => (int) $created['project']['id'],
+        'name'       => 'вебхук-петра',
+        'url'        => 'http://127.0.0.1:9/петра',
+    ]);
+
     $fixtures = [
         'roles'     => [$ownerRole, $emptyRole, $watchRole],
+        'webhook'   => $subscription,
         'petr'      => (int) $petr['id'],
         'ivan'      => (int) $ivan['id'],
         'nick'      => (int) $nick['id'],
@@ -180,6 +188,7 @@ test('пользователь видит только свои записи', f
         '/ui/transports' => 'транспорт-петра',
         '/ui/templates'  => 'шаблон-петра',
         '/ui/messages'   => 'Письмо Петра',
+        '/ui/subscriptions' => 'вебхук-петра',
     ] as $path => $needle) {
         $response = $kernel->handle(httpRequest('GET', $path));
 
@@ -198,6 +207,7 @@ test('пользователь видит только свои записи', f
     assertSame(302, $kernel->handle(httpRequest('GET', '/ui/transports/' . $ids['transport']))->status());
     assertSame(302, $kernel->handle(httpRequest('GET', '/ui/templates/' . $ids['template']))->status());
     assertSame(302, $kernel->handle(httpRequest('GET', '/ui/messages/' . $ids['message']))->status());
+    assertSame(302, $kernel->handle(httpRequest('GET', '/ui/subscriptions/' . $ids['webhook']))->status());
 
     // А владельцу — открывается
     accessLogin($ids['petr']);

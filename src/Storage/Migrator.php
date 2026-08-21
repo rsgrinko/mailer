@@ -102,9 +102,76 @@ final class Migrator
             '0007_audit' => $this->auditSchema(),
             '0008_suppressions' => $this->suppressionsSchema(),
             '0009_unsubscribe' => $this->unsubscribeSchema(),
+            '0010_webhook_subscriptions' => $this->webhookSchema(),
         ];
     }
 
+    /**
+     * Подписки на события вместо одного адреса у проекта и подробности доставок.
+     *
+     * Раньше вебхук был один на проект (колонки projects.webhook_url и
+     * webhook_secret) и слал ровно два события. Теперь адресов может быть
+     * сколько угодно, у каждого свой секрет и свой набор событий.
+     *
+     * Старые колонки в projects не трогаем: база боевая, а данные из них
+     * переезжают копией. Перенесённая подписка получает payload_version = 1 —
+     * прежний плоский формат тела и прежние имена событий, чтобы у тех, кто уже
+     * принимает наши вебхуки, ничего не сломалось.
+     *
+     * Секрет переносится как есть, без шифрования: миграции — это чистый SQL,
+     * а Crypto::decrypt() понимает и незашифрованное значение. Перезаписанный
+     * в панели секрет ляжет уже зашифрованным.
+     *
+     * @return array<int, string>
+     */
+    private function webhookSchema(): array
+    {
+        $id   = $this->id();
+        $str  = fn (int $length = 191): string => $this->str($length);
+        $text = $this->text();
+        $long = $this->longText();
+        $int  = $this->int();
+        $dt   = $this->dt();
+        $end  = $this->tableSuffix();
+        $now  = Database::now();
+
+        return [
+            "CREATE TABLE IF NOT EXISTS project_webhooks (
+                id {$id},
+                project_id {$int} NOT NULL,
+                name {$str(191)} NULL,
+                url {$str(500)} NOT NULL,
+                secret {$str(500)} NULL,
+                events {$text} NULL,
+                payload_version {$int} NOT NULL DEFAULT 2,
+                active {$int} NOT NULL DEFAULT 1,
+                failures {$int} NOT NULL DEFAULT 0,
+                last_status {$str(20)} NULL,
+                last_error {$text} NULL,
+                last_delivery_at {$dt} NULL,
+                created_at {$dt} NOT NULL,
+                updated_at {$dt} NOT NULL
+            ){$end}",
+            $this->index('idx_project_webhooks_project', 'project_webhooks', 'project_id, active'),
+
+            // Прежние вебхуки проектов переезжают как есть
+            "INSERT INTO project_webhooks (project_id, name, url, secret, events, payload_version, active, created_at, updated_at)
+                SELECT id, 'Вебхук проекта', webhook_url, webhook_secret, NULL, 1, 1, '{$now}', '{$now}'
+                FROM projects WHERE webhook_url IS NOT NULL AND webhook_url <> ''",
+
+            // Доставка: что именно ушло и что ответили. Без этого отладить вебхук нечем
+            "ALTER TABLE webhook_deliveries ADD COLUMN uuid {$str(36)} NULL",
+            "ALTER TABLE webhook_deliveries ADD COLUMN subscription_id {$int} NULL",
+            "ALTER TABLE webhook_deliveries ADD COLUMN request_headers {$text} NULL",
+            "ALTER TABLE webhook_deliveries ADD COLUMN response_headers {$text} NULL",
+            "ALTER TABLE webhook_deliveries ADD COLUMN response_body {$long} NULL",
+            "ALTER TABLE webhook_deliveries ADD COLUMN duration_ms {$int} NULL",
+
+            $this->index('idx_webhooks_uuid', 'webhook_deliveries', 'uuid'),
+            $this->index('idx_webhooks_event', 'webhook_deliveries', 'event, id'),
+            $this->index('idx_webhooks_subscription', 'webhook_deliveries', 'subscription_id, id'),
+        ];
+    }
     /**
      * Отписка одной кнопкой у проекта. Ноль — заголовки отписки в его письма не ставим:
      * служебному письму про сброс пароля кнопка «отписаться» ни к чему, а массовой

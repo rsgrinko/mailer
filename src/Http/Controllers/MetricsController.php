@@ -13,6 +13,7 @@ use Mailer\Repository\SettingRepository;
 use Mailer\Repository\SuppressionRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\WebhookRepository;
+use Mailer\Repository\WebhookSubscriptionRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Logger;
 use Throwable;
@@ -35,6 +36,7 @@ final class MetricsController
     private ProjectRepository $projects;
     private SettingRepository $settings;
     private SuppressionRepository $suppressions;
+    private WebhookSubscriptionRepository $subscriptions;
 
     /** Сколько групп метрик не собралось — отдаём это отдельной метрикой */
     private int $failed = 0;
@@ -45,14 +47,16 @@ final class MetricsController
         TransportRepository $transports,
         ProjectRepository $projects,
         SettingRepository $settings,
-        SuppressionRepository $suppressions
+        SuppressionRepository $suppressions,
+        WebhookSubscriptionRepository $subscriptions
     ) {
-        $this->messages     = $messages;
-        $this->webhooks     = $webhooks;
-        $this->transports   = $transports;
-        $this->projects     = $projects;
-        $this->settings     = $settings;
-        $this->suppressions = $suppressions;
+        $this->messages      = $messages;
+        $this->webhooks      = $webhooks;
+        $this->transports    = $transports;
+        $this->projects      = $projects;
+        $this->settings      = $settings;
+        $this->suppressions  = $suppressions;
+        $this->subscriptions = $subscriptions;
     }
 
     /**
@@ -124,7 +128,12 @@ final class MetricsController
                 $samples[] = ['labels' => ['status' => (string) $status], 'value' => (int) $count];
             }
 
-            return [$this->metric('mailer_webhooks', 'Доставки вебхуков по статусам', $samples)];
+            return [
+                $this->metric('mailer_webhooks', 'Доставки вебхуков по статусам', $samples),
+                $this->metric('mailer_webhook_subscriptions', 'Включённые вебхуки проектов', [
+                    ['value' => $this->subscriptions->countActive()],
+                ]),
+            ];
         });
 
         $this->section($lines, 'suppressions', function (): array {

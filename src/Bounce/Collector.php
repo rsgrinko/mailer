@@ -10,6 +10,8 @@ use Mailer\Repository\SuppressionRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
+use Mailer\Webhook\Dispatcher;
+use Mailer\Webhook\Event as WebhookEvent;
 use Throwable;
 
 /**
@@ -26,6 +28,7 @@ final class Collector
     private SuppressionRepository $suppressions;
     private MessageRepository $messages;
     private EventRepository $events;
+    private Dispatcher $webhooks;
     private Logger $logger;
 
     public function __construct(?Database $db = null)
@@ -34,6 +37,7 @@ final class Collector
         $this->suppressions = new SuppressionRepository($this->db);
         $this->messages     = new MessageRepository($this->db);
         $this->events       = new EventRepository($this->db);
+        $this->webhooks     = new Dispatcher($this->db);
         $this->logger       = new Logger('bounce');
     }
 
@@ -143,6 +147,15 @@ final class Collector
         if ($message === null) {
             return;
         }
+
+        // Отказ пришёл отдельным письмом, когда наше уже числилось отправленным —
+        // подписчику это тем более нужно знать
+        $this->webhooks->message(WebhookEvent::MESSAGE_BOUNCED, $message, [
+            'recipient'  => $recipient['email'],
+            'answer'     => $recipient['diagnostic'] !== '' ? $recipient['diagnostic'] : $recipient['status'],
+            'permanent'  => $recipient['permanent'],
+            'suppressed' => $blocked,
+        ]);
 
         $this->events->add(
             (int) $message['id'],

@@ -20,6 +20,7 @@ use Mailer\Ui\Controllers\DashboardController;
 use Mailer\Ui\Controllers\MessagesController;
 use Mailer\Ui\Controllers\ProjectsController;
 use Mailer\Ui\Controllers\RolesController;
+use Mailer\Ui\Controllers\SubscriptionsController;
 use Mailer\Ui\Controllers\SuppressionsController;
 use Mailer\Ui\Controllers\TemplatesController;
 use Mailer\Ui\Controllers\TransportsController;
@@ -126,13 +127,19 @@ return static function (Router $router): void {
                 $router->post('/suppressions/{id:\d+}/delete', [SuppressionsController::class, 'delete'])->name('ui.suppressions.delete');
             });
 
-            // Вебхуки
+            // Вебхуки: подписки проектов и доставки по ним
             $router->group(['middleware' => 'can:webhooks.view'], static function (Router $router): void {
                 $router->get('/webhooks', [WebhooksController::class, 'index'])->name('ui.webhooks');
+                $router->get('/webhooks/{id:\d+}', [WebhooksController::class, 'show'])->name('ui.webhooks.show');
+                $router->get('/subscriptions', [SubscriptionsController::class, 'index'])->name('ui.subscriptions');
+                $router->get('/subscriptions/{id:\d+}', [SubscriptionsController::class, 'form'])->name('ui.subscriptions.show');
             });
             $router->group(['middleware' => 'can:webhooks.manage'], static function (Router $router): void {
                 $router->post('/webhooks/process', [WebhooksController::class, 'process'])->name('ui.webhooks.process');
                 $router->post('/webhooks/{id:\d+}/{action}', [WebhooksController::class, 'action'])->name('ui.webhooks.action');
+                $router->get('/subscriptions/new', [SubscriptionsController::class, 'form'])->name('ui.subscriptions.new');
+                $router->post('/subscriptions/save', [SubscriptionsController::class, 'save'])->name('ui.subscriptions.save');
+                $router->post('/subscriptions/{id:\d+}/{action}', [SubscriptionsController::class, 'action'])->name('ui.subscriptions.action');
             });
 
             // Пользователи панели

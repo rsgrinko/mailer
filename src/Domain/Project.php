@@ -21,9 +21,7 @@ final class Project
         public readonly int $rateLimitDay,
         public readonly ?int $transportId,
         public readonly ?string $defaultFromEmail,
-        public readonly ?string $defaultFromName,
-        public readonly ?string $webhookUrl,
-        public readonly ?string $webhookSecret
+        public readonly ?string $defaultFromName
     ) {
     }
 
@@ -40,9 +38,7 @@ final class Project
             (int) ($row['rate_limit_day'] ?? 0),
             isset($row['transport_id']) && $row['transport_id'] !== null ? (int) $row['transport_id'] : null,
             self::text($row['default_from_email'] ?? null),
-            self::text($row['default_from_name'] ?? null),
-            self::text($row['webhook_url'] ?? null),
-            self::text($row['webhook_secret'] ?? null)
+            self::text($row['default_from_name'] ?? null)
         );
     }
 

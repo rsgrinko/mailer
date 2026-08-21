@@ -74,8 +74,8 @@ final class Permission
             self::SUPPRESSIONS_MANAGE => 'Закрывать и открывать адреса',
         ],
         'Вебхуки' => [
-            self::WEBHOOKS_VIEW   => 'Смотреть очередь вебхуков',
-            self::WEBHOOKS_MANAGE => 'Повторять и удалять доставки',
+            self::WEBHOOKS_VIEW   => 'Смотреть вебхуки и доставки',
+            self::WEBHOOKS_MANAGE => 'Заводить вебхуки, повторять доставки',
         ],
         'Сервис' => [
             self::AUDIT_VIEW    => 'Читать журнал действий',
@@ -170,6 +170,7 @@ final class Permission
             self::SUPPRESSIONS_VIEW,
             self::SUPPRESSIONS_MANAGE,
             self::WEBHOOKS_VIEW,
+            self::WEBHOOKS_MANAGE,
         ];
     }
 }

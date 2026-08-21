@@ -8,6 +8,7 @@ use Mailer\Bounce\Collector;
 use Mailer\RateLimit\RateLimiter;
 use Mailer\Repository\AuditRepository;
 use Mailer\Repository\SettingRepository;
+use Mailer\Repository\WebhookRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
@@ -235,6 +236,27 @@ final class Worker
         }
 
         $this->purgeAudit();
+        $this->purgeWebhooks();
+    }
+
+    /**
+     * Доставки вебхуков хранят тело запроса и ответ сервера — за месяцы это заметный
+     * объём. Разобранные (доставленные и окончательно неудачные) чистим по сроку,
+     * очередь не трогаем. Ноль в настройке — хранить всё.
+     */
+    private function purgeWebhooks(): void
+    {
+        $days = (int) Config::get('webhook.keep_days', 30);
+
+        if ($days <= 0) {
+            return;
+        }
+
+        $removed = (new WebhookRepository())->purge($days);
+
+        if ($removed > 0) {
+            $this->logger->info('Удалены старые доставки вебхуков', ['count' => $removed, 'days' => $days]);
+        }
     }
 
     /**

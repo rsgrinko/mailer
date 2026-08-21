@@ -14,6 +14,7 @@ use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\UserRepository;
+use Mailer\Repository\WebhookSubscriptionRepository;
 use Mailer\Support\Config;
 use Mailer\Ui\Audit;
 use Mailer\Ui\View;
@@ -29,19 +30,22 @@ final class ProjectsController extends ResourceController
     private MessageRepository $messages;
     private RateLimiter $limiter;
     private UserRepository $users;
+    private WebhookSubscriptionRepository $webhooks;
 
     public function __construct(
         ProjectRepository $projects,
         TransportRepository $transports,
         MessageRepository $messages,
         RateLimiter $limiter,
-        UserRepository $users
+        UserRepository $users,
+        WebhookSubscriptionRepository $webhooks
     ) {
         $this->projects   = $projects;
         $this->transports = $transports;
         $this->messages   = $messages;
         $this->limiter    = $limiter;
         $this->users      = $users;
+        $this->webhooks   = $webhooks;
     }
 
     public function index(Request $request, Scope $scope): Response
@@ -53,15 +57,21 @@ final class ProjectsController extends ResourceController
         );
 
         $usage = [];
+        $hooks = [];
         foreach ($result['items'] as $item) {
             $usage[(int) $item['id']] = $this->limiter->projectUsage((int) $item['id']);
+            $hooks[(int) $item['id']] = count(array_filter(
+                $this->webhooks->forProject((int) $item['id']),
+                static fn (array $hook): bool => (int) $hook['active'] === 1
+            ));
         }
 
         return Response::html(View::render('projects', [
-            'active' => 'projects',
-            'items'  => $result['items'],
-            'result' => $result,
-            'usage'  => $usage,
+            'active'   => 'projects',
+            'items'    => $result['items'],
+            'result'   => $result,
+            'usage'    => $usage,
+            'webhooks' => $hooks,
         ], 'Проекты'));
     }
 
@@ -69,9 +79,11 @@ final class ProjectsController extends ResourceController
     {
         $project = $this->requireIfEditing($id, $id === null ? null : $this->projects->find($id, $scope));
 
-        $recent = [];
+        $recent   = [];
+        $webhooks = [];
         if ($project !== null) {
-            $recent = $this->messages->paginate(['project_id' => $id], 1, 10, $scope)['items'];
+            $recent   = $this->messages->paginate(['project_id' => $id], 1, 10, $scope)['items'];
+            $webhooks = $this->webhooks->forProject((int) $project['id']);
         }
 
         return Response::html(View::render('project_form', [
@@ -80,6 +92,7 @@ final class ProjectsController extends ResourceController
             'transports' => $this->transports->all(false, $scope),
             'usage'      => $project !== null ? $this->limiter->projectUsage((int) $project['id']) : ['hour' => 0, 'day' => 0],
             'recent'     => $recent,
+            'webhooks'   => $webhooks,
             // Владельца выбирают только те, кто видит чужие данные: остальным он и так свой
             'owners'     => $viewer->isAdmin() ? $this->users->all() : [],
             // Без права на правку проект только показываем — полями ввода дразнить незачем
@@ -99,15 +112,9 @@ final class ProjectsController extends ResourceController
             'default_from_name'  => trim((string) $request->input('default_from_name', '')),
             'rate_limit_hour'    => (int) $request->input('rate_limit_hour', 0),
             'rate_limit_day'     => (int) $request->input('rate_limit_day', 0),
-            'webhook_url'        => trim((string) $request->input('webhook_url', '')),
             'active'             => $request->input('active') !== null,
             'unsubscribe'        => $request->input('unsubscribe') !== null,
         ];
-
-        $secret = trim((string) $request->input('webhook_secret', ''));
-        if ($secret !== '') {
-            $data['webhook_secret'] = $secret;
-        }
 
         // Владельца назначает только тот, кто видит чужие данные, остальные заводят на себя
         if ($viewer->isAdmin()) {

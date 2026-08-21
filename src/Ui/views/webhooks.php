@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Очередь и история вебхуков.
+ * Доставки вебхуков: очередь и история.
  *
  * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  * @var array<string, int> $counts
@@ -14,10 +14,12 @@ declare(strict_types=1);
 use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
+use Mailer\Webhook\Event as WebhookEvent;
 ?>
 <div class="row">
-    <h1 style="margin:0">Вебхуки</h1>
+    <h1 style="margin:0">Доставки <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
+    <a class="btn" href="<?= View::e(View::route('ui.subscriptions')) ?>">Вебхуки проектов</a>
     <?php if (View::can(Permission::WEBHOOKS_MANAGE)) { ?>
         <form method="post" action="<?= View::e(View::route('ui.webhooks.process')) ?>">
             <?= View::csrf() ?>
@@ -36,6 +38,17 @@ use Mailer\Ui\View;
                     <?php foreach (['queued' => 'в очереди', 'delivered' => 'доставлен', 'failed' => 'не доставлен'] as $value => $label) { ?>
                         <option value="<?= View::e($value) ?>" <?= $filters['status'] === $value ? 'selected' : '' ?>>
                             <?= View::e($label) ?> (<?= (int) ($counts[$value] ?? 0) ?>)
+                        </option>
+                    <?php } ?>
+                </select>
+            </label>
+            <label>
+                <span>Событие</span>
+                <select name="event">
+                    <option value="">любое</option>
+                    <?php foreach (WebhookEvent::LABELS as $code => $label) { ?>
+                        <option value="<?= View::e($code) ?>" <?= $filters['event'] === $code ? 'selected' : '' ?>>
+                            <?= View::e($label) ?>
                         </option>
                     <?php } ?>
                 </select>
@@ -71,38 +84,25 @@ use Mailer\Ui\View;
             <?php foreach ($result['items'] as $item) { ?>
                 <tr>
                     <td class="small nowrap"><?= View::e(View::date((string) $item['created_at'])) ?></td>
-                    <td><?= View::e((string) $item['event']) ?></td>
+                    <td class="small"><?= View::e(WebhookEvent::label((string) $item['event'])) ?></td>
                     <td><span class="badge <?= View::e((string) $item['status']) ?>"><?= View::e(View::webhookStatus((string) $item['status'])) ?></span></td>
                     <td class="small mono hide-sm"><?= View::e(Str::limit((string) $item['url'], 45)) ?></td>
                     <td class="small hide-sm"><?= (int) $item['attempts'] ?></td>
-                    <td class="small hide-sm"><?= View::e((string) ($item['response_code'] ?? '—')) ?></td>
+                    <td class="small hide-sm">
+                        <?= View::e((string) ($item['response_code'] ?? '—')) ?>
+                        <?php if (($item['duration_ms'] ?? null) !== null) { ?>
+                            <span class="muted">/ <?= (int) $item['duration_ms'] ?> мс</span>
+                        <?php } ?>
+                    </td>
                     <td class="small"><?= View::e(Str::limit((string) ($item['last_error'] ?? ''), 40)) ?></td>
                     <td class="nowrap">
-                        <div class="row">
-                            <?php if ($item['message_id'] !== null && View::can(Permission::MESSAGES_VIEW)) { ?>
-                                <a href="<?= View::e(View::route('ui.messages.show', ['id' => $item['message_id']])) ?>">письмо</a>
-                            <?php } ?>
-                            <?php if (View::can(Permission::WEBHOOKS_MANAGE)) { ?>
-                                <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'send'])) ?>">
-                                    <?= View::csrf() ?>
-                                    <button type="submit">отправить</button>
-                                </form>
-                                <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'delete'])) ?>">
-                                    <?= View::csrf() ?>
-                                    <button class="danger" type="submit">удалить</button>
-                                </form>
-                            <?php } ?>
-                        </div>
-                        <details>
-                            <summary class="muted small">данные</summary>
-                            <pre><?= View::e((string) $item['payload']) ?></pre>
-                        </details>
+                        <a href="<?= View::e(View::route('ui.webhooks.show', ['id' => $item['id']])) ?>">открыть</a>
                     </td>
                 </tr>
             <?php } ?>
 
             <?php if ($result['items'] === []) { ?>
-                <tr><td colspan="8" class="muted">Вебхуков нет. Они появятся, если у проекта задан адрес вебхука.</td></tr>
+                <tr><td colspan="8" class="muted">Доставок нет. Они появятся, когда у проекта будет хотя бы один вебхук.</td></tr>
             <?php } ?>
         </table>
     </div>

@@ -112,11 +112,14 @@ return [
         'project' => Env::string('SENDMAIL_PROJECT', 'local-sendmail'),
     ],
 
-    // Вебхуки о статусе письма
+    // Вебхуки: сообщения проекту о том, что случилось с его письмом
     'webhook' => [
         'timeout'      => Env::int('WEBHOOK_TIMEOUT', 10),
         'max_attempts' => Env::int('WEBHOOK_MAX_ATTEMPTS', 5),
         'backoff'      => [30, 120, 600, 1800, 7200],
+        // Сколько дней хранить разобранные доставки вместе с ответами серверов
+        // (0 — хранить всегда). Очередь чистка не трогает
+        'keep_days'    => Env::int('WEBHOOK_KEEP_DAYS', 30),
     ],
 
     // Отписка одной кнопкой (List-Unsubscribe, RFC 8058)

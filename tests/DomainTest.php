@@ -19,7 +19,6 @@ test('проект собирается из строки базы', function ()
         'transport_id'       => null,
         'default_from_email' => ' shop@example.com ',
         'default_from_name'  => '',
-        'webhook_url'        => null,
     ]);
 
     assertSame(7, $project->id);
@@ -30,7 +29,6 @@ test('проект собирается из строки базы', function ()
     assertSame(null, $project->transportId);
     assertSame('shop@example.com', $project->defaultFromEmail, 'пробелы по краям убираются');
     assertSame(null, $project->defaultFromName, 'пустая строка — это отсутствие значения');
-    assertSame(null, $project->webhookUrl);
 });
 
 test('отключённый проект виден по флагу', function (): void {

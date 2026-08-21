@@ -10,6 +10,8 @@ use Mailer\Http\Response;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\SuppressionRepository;
 use Mailer\Ui\View;
+use Mailer\Webhook\Dispatcher;
+use Mailer\Webhook\Event as WebhookEvent;
 
 /**
  * Отписка по ссылке из письма.
@@ -68,6 +70,14 @@ final class UnsubscribeController
             'owner_id'   => (int) ($project['owner_id'] ?? 0),
             'note'       => 'отписка по ссылке из письма',
         ]);
+
+        // Проекту стоит узнать об отписке сразу, а не при следующей выгрузке стоп-листа
+        if ($data['project_id'] > 0) {
+            (new Dispatcher())->recipient(WebhookEvent::RECIPIENT_UNSUBSCRIBED, $data['project_id'], [
+                'email'  => $data['email'],
+                'source' => 'link',
+            ]);
+        }
 
         return $this->page(
             'Готово',

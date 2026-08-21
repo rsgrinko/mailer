@@ -13,6 +13,8 @@ use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
 use Mailer\Support\MailerException;
+use Mailer\Webhook\Dispatcher;
+use Mailer\Webhook\Event as WebhookEvent;
 
 /**
  * Очередь писем: приём, выдача воркеру, повторы и отмена.
@@ -24,6 +26,7 @@ final class Queue
     private EventRepository $events;
     private RateLimiter $limiter;
     private SuppressionRepository $suppressions;
+    private Dispatcher $webhooks;
     private Logger $logger;
 
     public function __construct(
@@ -37,6 +40,7 @@ final class Queue
         $this->events       = $events ?? new EventRepository($this->db);
         $this->limiter      = $limiter ?? new RateLimiter($this->db);
         $this->suppressions = new SuppressionRepository($this->db);
+        $this->webhooks     = new Dispatcher($this->db);
         $this->logger       = new Logger('queue');
     }
 
@@ -132,6 +136,22 @@ final class Queue
 
         if ($projectId !== null) {
             $this->limiter->hitProject($projectId);
+        }
+
+        // Вебхуки шлём по строке из базы, а не по объекту письма: у подписчика
+        // должно быть то же самое, что и в карточке письма
+        $stored = $this->messages->find($id);
+        if ($stored !== null) {
+            $this->webhooks->message(WebhookEvent::MESSAGE_QUEUED, $stored, [
+                'source' => (string) ($options['source'] ?? MessageRepository::SOURCE_API),
+            ]);
+
+            if ($suppressed !== []) {
+                $this->webhooks->message(WebhookEvent::MESSAGE_SUPPRESSED, $stored, [
+                    'recipients' => $suppressed,
+                    'all'        => $status === MessageRepository::SUPPRESSED,
+                ]);
+            }
         }
 
         $this->logger->info('Письмо принято', [
@@ -349,6 +369,10 @@ final class Queue
         ]);
 
         $this->events->add($id, EventRepository::CANCELED, $reason);
+
+        $this->webhooks->message(WebhookEvent::MESSAGE_CANCELED, array_merge($row, [
+            'status' => MessageRepository::CANCELED,
+        ]), ['reason' => $reason]);
 
         return true;
     }

@@ -7,6 +7,7 @@ declare(strict_types=1);
  *
  * @var array<int, array<string, mixed>> $items
  * @var array<int, array{hour: int, day: int}> $usage
+ * @var array<int, int> $webhooks сколько включённых подписок у проекта
  * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  */
 
@@ -31,7 +32,7 @@ use Mailer\Ui\View;
                 <th class="hide-sm">Отправитель</th>
                 <th class="hide-sm">За час</th>
                 <th class="hide-sm">За сутки</th>
-                <th class="hide-sm">Вебхук</th>
+                <th class="hide-sm">Вебхуки</th>
                 <th>Состояние</th>
             </tr>
 

@@ -9,34 +9,53 @@ use Mailer\Http\Request;
 use Mailer\Http\Response;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\WebhookRepository;
+use Mailer\Repository\WebhookSubscriptionRepository;
 use Mailer\Support\Config;
 use Mailer\Ui\Audit;
 use Mailer\Ui\View;
 use Mailer\Webhook\WebhookSender;
 
 /**
- * Вебхуки: что отправлено проектам и что не получилось.
+ * Доставки вебхуков: что ушло проектам, что ответили и что не получилось.
+ * Кому и о чём мы вообще шлём — рядом, в SubscriptionsController.
  */
-final class WebhooksController
+final class WebhooksController extends ResourceController
 {
     private WebhookRepository $webhooks;
+    private WebhookSubscriptionRepository $subscriptions;
     private ProjectRepository $projects;
 
     public function __construct(
         WebhookRepository $webhooks,
+        WebhookSubscriptionRepository $subscriptions,
         ProjectRepository $projects
     ) {
-        $this->webhooks = $webhooks;
-        $this->projects = $projects;
+        $this->webhooks      = $webhooks;
+        $this->subscriptions = $subscriptions;
+        $this->projects      = $projects;
+    }
+
+    protected function listRoute(): string
+    {
+        return 'ui.webhooks';
+    }
+
+    protected function notFoundMessage(): string
+    {
+        return 'Доставка не найдена';
     }
 
     public function index(Request $request, Scope $scope): Response
     {
+        $filters = [
+            'status'          => (string) $request->query('status', ''),
+            'event'           => (string) $request->query('event', ''),
+            'project_id'      => (string) $request->query('project_id', ''),
+            'subscription_id' => (string) $request->query('subscription_id', ''),
+        ];
+
         $result = $this->webhooks->paginate(
-            [
-                'status'     => (string) $request->query('status', ''),
-                'project_id' => (string) $request->query('project_id', ''),
-            ],
+            $filters,
             (int) $request->query('page', 1),
             (int) Config::get('ui.per_page', 30),
             $scope
@@ -47,11 +66,28 @@ final class WebhooksController
             'result'   => $result,
             'counts'   => $this->webhooks->countByStatus($scope),
             'projects' => $this->projects->all($scope),
-            'filters'  => [
-                'status'     => (string) $request->query('status', ''),
-                'project_id' => (string) $request->query('project_id', ''),
-            ],
+            'filters'  => $filters,
         ], 'Вебхуки'));
+    }
+
+    /**
+     * Карточка доставки: запрос как есть и ответ сервера целиком. По коду 500 без
+     * тела чужой приёмник не отладить, поэтому храним и показываем всё.
+     */
+    public function show(Request $request, int $id, Scope $scope): Response
+    {
+        $item = $this->require($this->webhooks->find($id, $scope));
+
+        $subscription = $item['subscription_id'] === null
+            ? null
+            : $this->subscriptions->find((int) $item['subscription_id'], $scope);
+
+        return Response::html(View::render('webhook', [
+            'active'       => 'webhooks',
+            'item'         => $item,
+            'subscription' => $subscription,
+            'project'      => $item['project_id'] === null ? null : $this->projects->find((int) $item['project_id'], $scope),
+        ], 'Доставка вебхука'));
     }
 
     /**
@@ -67,13 +103,7 @@ final class WebhooksController
 
     public function action(Request $request, int $id, string $action, Scope $scope): Response
     {
-        $item = $this->webhooks->find($id, $scope);
-
-        if ($item === null) {
-            View::flash('Запись не найдена', 'error');
-
-            return Response::redirect(View::route('ui.webhooks'));
-        }
+        $item = $this->require($this->webhooks->find($id, $scope));
 
         switch ($action) {
             case 'retry':
@@ -83,19 +113,20 @@ final class WebhooksController
 
             case 'send':
                 $ok = (new WebhookSender())->deliver($item);
-                View::flash($ok ? 'Вебхук доставлен' : 'Доставить не удалось, подробности в списке', $ok ? 'ok' : 'error');
+                View::flash($ok ? 'Вебхук доставлен' : 'Доставить не удалось, подробности в карточке', $ok ? 'ok' : 'error');
                 break;
 
             case 'delete':
                 $this->webhooks->delete($id);
                 Audit::deleted('webhook', $id, 'доставка вебхука «' . (string) $item['event'] . '»');
                 View::flash('Запись удалена');
-                break;
+
+                return Response::redirect(View::route('ui.webhooks'));
 
             default:
                 View::flash('Неизвестное действие: ' . $action, 'error');
         }
 
-        return Response::redirect(View::route('ui.webhooks'));
+        return Response::redirect(View::route('ui.webhooks.show', ['id' => $id]));
     }
 }

@@ -182,6 +182,7 @@ final class View
             'user'      => 'пользователь',
             'role'      => 'роль',
             'webhook'   => 'вебхук',
+            'subscription' => 'вебхук проекта',
             'system'    => 'сервис',
             default     => $entity,
         };

@@ -8,10 +8,12 @@ use Mailer\Domain\Scope;
 use Mailer\Security\ApiKey;
 use Mailer\Storage\Database;
 use Mailer\Support\MailerException;
-use Mailer\Support\Str;
 
 /**
- * Проекты — те, кто пользуется нашим API. У каждого свой ключ, лимиты и вебхук.
+ * Проекты — те, кто пользуется нашим API. У каждого свой ключ и лимиты.
+ *
+ * Вебхуки живут отдельно: у проекта их может быть несколько, каждый со своим
+ * набором событий (WebhookSubscriptionRepository).
  */
 final class ProjectRepository
 {
@@ -151,8 +153,6 @@ final class ProjectRepository
             'default_from_name'  => $data['default_from_name'] ?? null,
             'rate_limit_hour'    => (int) ($data['rate_limit_hour'] ?? 0),
             'rate_limit_day'     => (int) ($data['rate_limit_day'] ?? 0),
-            'webhook_url'        => $data['webhook_url'] ?? null,
-            'webhook_secret'     => ($data['webhook_secret'] ?? '') !== '' ? (string) $data['webhook_secret'] : Str::random(32),
             'active'             => (int) (bool) ($data['active'] ?? true),
             'unsubscribe'        => (int) (bool) ($data['unsubscribe'] ?? false),
             'owner_id'           => (int) ($data['owner_id'] ?? 0),
@@ -173,7 +173,7 @@ final class ProjectRepository
     {
         $fields = ['updated_at' => Database::now()];
 
-        foreach (['name', 'description', 'default_from_email', 'default_from_name', 'webhook_url', 'webhook_secret'] as $key) {
+        foreach (['name', 'description', 'default_from_email', 'default_from_name'] as $key) {
             if (array_key_exists($key, $data)) {
                 $fields[$key] = $data[$key] === '' ? null : (string) $data[$key];
             }
@@ -231,7 +231,12 @@ final class ProjectRepository
 
     public function delete(int $id): void
     {
-        $this->db->delete('projects', ['id' => $id]);
+        // Подписки на события уезжают вместе с проектом: без него они всё равно
+        // ничего не получат, а в списке вебхуков будут висеть неизвестно чьи
+        $this->db->transaction(function () use ($id): void {
+            $this->db->delete('project_webhooks', ['project_id' => $id]);
+            $this->db->delete('projects', ['id' => $id]);
+        });
     }
 
     /**

@@ -13,13 +13,14 @@ use Mailer\Repository\MessageRepository;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\SuppressionRepository;
 use Mailer\Repository\TransportRepository;
-use Mailer\Repository\WebhookRepository;
 use Mailer\Storage\Database;
 use Mailer\Support\Config;
 use Mailer\Support\Logger;
 use Mailer\Transport\TransportException;
 use Mailer\Transport\TransportFactory;
 use Mailer\Transport\TransportInterface;
+use Mailer\Webhook\Dispatcher;
+use Mailer\Webhook\Event as WebhookEvent;
 use Throwable;
 
 /**
@@ -35,7 +36,7 @@ final class Sender
     private EventRepository $events;
     private TransportRepository $transports;
     private ProjectRepository $projects;
-    private WebhookRepository $webhooks;
+    private Dispatcher $webhooks;
     private TransportFactory $factory;
     private RateLimiter $limiter;
     private SuppressionRepository $suppressions;
@@ -56,7 +57,7 @@ final class Sender
         $this->events       = new EventRepository($this->db);
         $this->transports   = new TransportRepository($this->db);
         $this->projects     = new ProjectRepository($this->db);
-        $this->webhooks     = new WebhookRepository($this->db);
+        $this->webhooks     = new Dispatcher($this->db);
         $this->factory      = new TransportFactory($this->transports);
         $this->limiter      = new RateLimiter($this->db);
         $this->suppressions = new SuppressionRepository($this->db);
@@ -148,7 +149,15 @@ final class Sender
                 $this->events->add($id, EventRepository::SENT, $info);
                 $this->transports->markUsed((int) $transportRow['id'], null);
                 $this->limiter->hitTransport((int) $transportRow['id']);
-                $this->queueWebhook($row, 'sent', ['info' => $info, 'transport' => $transport->name()]);
+                // В теле вебхука письмо должно быть уже отправленным, а не таким,
+                // каким мы его достали из очереди
+                $this->webhooks->message(WebhookEvent::MESSAGE_SENT, array_merge($row, [
+                    'status'         => MessageRepository::SENT,
+                    'attempts'       => $attempt,
+                    'transport_used' => $transport->name(),
+                    'sender_used'    => $sender,
+                    'sent_at'        => Database::now(),
+                ]), ['info' => $info]);
             });
 
             $this->logger->info('Письмо отправлено', [
@@ -274,6 +283,11 @@ final class Sender
                 'next_try_in' => $delay,
             ]);
 
+            $this->webhooks->message(WebhookEvent::MESSAGE_RETRY, array_merge($row, [
+                'status'   => MessageRepository::QUEUED,
+                'attempts' => $attempt,
+            ]), ['error' => $error, 'attempt' => $attempt, 'next_try_in' => $delay]);
+
             $this->logger->warning('Отправка не удалась, попробуем позже', [
                 'uuid'    => $row['uuid'],
                 'attempt' => $attempt,
@@ -307,7 +321,10 @@ final class Sender
                 }
             }
 
-            $this->queueWebhook($row, 'failed', ['error' => $error, 'attempts' => $attempt]);
+            $this->webhooks->message(WebhookEvent::MESSAGE_FAILED, array_merge($row, [
+                'status'   => MessageRepository::FAILED,
+                'attempts' => $attempt,
+            ]), ['error' => $error, 'attempts' => $attempt]);
 
             $this->suppressBounced($row, $e);
         });
@@ -361,6 +378,12 @@ final class Sender
             ['recipient' => $recipient, 'answer' => $answer]
         );
 
+        $this->webhooks->message(WebhookEvent::MESSAGE_BOUNCED, $row, [
+            'recipient' => $recipient,
+            'answer'    => $answer,
+            'permanent' => true,
+        ]);
+
         $this->logger->warning('Адрес добавлен в стоп-лист по отказу сервера', [
             'recipient' => $recipient,
             'answer'    => $answer,
@@ -377,39 +400,5 @@ final class Sender
         $index  = min($attempt - 1, count($delays) - 1);
 
         return (int) ($delays[max(0, $index)] ?? 300);
-    }
-
-    /**
-     * Ставит вебхук в очередь, если у проекта указан адрес.
-     *
-     * @param array<string, mixed> $row
-     * @param array<string, mixed> $extra
-     */
-    private function queueWebhook(array $row, string $event, array $extra = []): void
-    {
-        if ($row['project_id'] === null) {
-            return;
-        }
-
-        $project = $this->projects->find((int) $row['project_id']);
-        if ($project === null || ($project['webhook_url'] ?? '') === '') {
-            return;
-        }
-
-        $this->webhooks->enqueue(
-            (int) $project['id'],
-            (int) $row['id'],
-            (string) $project['webhook_url'],
-            $event,
-            array_merge([
-                'event'      => $event,
-                'message_id' => (string) $row['uuid'],
-                'status'     => $event === 'sent' ? MessageRepository::SENT : MessageRepository::FAILED,
-                'subject'    => $row['subject'],
-                'to'         => array_column($this->messages->decodeArray($row['to_json'] ?? null), 'email'),
-                'tag'        => $row['tag'],
-                'timestamp'  => time(),
-            ], $extra)
-        );
     }
 }

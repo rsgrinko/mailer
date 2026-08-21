@@ -10,6 +10,7 @@ declare(strict_types=1);
  * @var array<int, array<string, mixed>> $owners пользователи для выбора владельца (только администратору)
  * @var array{hour: int, day: int} $usage
  * @var array<int, array<string, mixed>> $recent
+ * @var array<int, array<string, mixed>> $webhooks подписки проекта на события
  * @var bool $editable можно ли править: без права projects.manage проект только показываем
  */
 
@@ -17,6 +18,7 @@ use Mailer\Domain\Permission;
 use Mailer\Security\ApiKey;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
+use Mailer\Webhook\Event as WebhookEvent;
 
 $isNew = $project === null;
 
@@ -108,7 +110,7 @@ $transportName = static function (?int $id) use ($transports): string {
         </div>
 
         <div class="card">
-            <h2>Лимиты и вебхук</h2>
+            <h2>Лимиты</h2>
 
             <div class="row">
                 <label style="flex:1">
@@ -125,15 +127,6 @@ $transportName = static function (?int $id) use ($transports): string {
                 <p class="muted small">Использовано: <?= (int) $usage['hour'] ?> за час, <?= (int) $usage['day'] ?> за сутки.</p>
             <?php } ?>
 
-            <label>
-                <span>Адрес вебхука (туда придёт результат отправки)</span>
-                <input type="text" name="webhook_url" value="<?= View::e((string) ($project['webhook_url'] ?? '')) ?>" placeholder="https://example.com/hooks/mail">
-            </label>
-
-            <label>
-                <span>Секрет подписи вебхука<?= $isNew ? ' (пусто — сгенерируем сами)' : '' ?></span>
-                <input type="text" name="webhook_secret" value="<?= View::e((string) ($project['webhook_secret'] ?? '')) ?>">
-            </label>
         </div>
     </div>
 
@@ -157,13 +150,11 @@ $transportName = static function (?int $id) use ($transports): string {
         </div>
 
         <div class="card">
-            <h2>Лимиты и вебхук</h2>
+            <h2>Лимиты</h2>
             <?= View::partial('props', ['rows' => [
                 'Писем в час'      => (int) ($project['rate_limit_hour'] ?? 0) ?: 'без ограничений',
                 'Писем в сутки'    => (int) ($project['rate_limit_day'] ?? 0) ?: 'без ограничений',
                 'Использовано'     => (int) $usage['hour'] . ' за час, ' . (int) $usage['day'] . ' за сутки',
-                'Адрес вебхука'    => $project['webhook_url'] ?? '',
-                'Секрет подписи'   => ((string) ($project['webhook_secret'] ?? '')) !== '' ? 'задан' : '',
             ]]) ?>
             <p class="muted small">Проект доступен вам только на просмотр: права на правку
                 (<span class="mono">projects.manage</span>) у роли нет.</p>
@@ -196,6 +187,40 @@ $transportName = static function (?int $id) use ($transports): string {
         </div>
         <?php } ?>
     </div>
+
+    <?php if (View::can(Permission::WEBHOOKS_VIEW)) { ?>
+    <div class="card">
+        <div class="row">
+            <h2 style="margin:0">Вебхуки проекта</h2>
+            <div class="spacer"></div>
+            <?php if (View::can(Permission::WEBHOOKS_MANAGE)) { ?>
+                <a class="btn" href="<?= View::e(View::route('ui.subscriptions.new', ['project_id' => (int) $project['id']])) ?>">Добавить вебхук</a>
+            <?php } ?>
+        </div>
+        <div class="table-wrap" style="margin-top:10px">
+            <table class="list">
+                <tr class="head"><th>Адрес</th><th>События</th><th>Состояние</th><th></th></tr>
+                <?php foreach ($webhooks as $hook) { ?>
+                    <tr>
+                        <td class="small mono"><?= View::e(Str::limit((string) $hook['url'], 50)) ?></td>
+                        <td class="small"><?= View::e($hook['events'] === [] ? 'все' : count($hook['events']) . ' из ' . count(WebhookEvent::all())) ?></td>
+                        <td class="small">
+                            <?php if ((int) $hook['active'] === 1) { ?>
+                                <span class="badge sent">включён</span>
+                            <?php } else { ?>
+                                <span class="badge canceled">выключен</span>
+                            <?php } ?>
+                        </td>
+                        <td><a href="<?= View::e(View::route('ui.subscriptions.show', ['id' => $hook['id']])) ?>">настроить</a></td>
+                    </tr>
+                <?php } ?>
+                <?php if ($webhooks === []) { ?>
+                    <tr><td colspan="4" class="muted">Вебхуков нет: о событиях писем проект не узнает</td></tr>
+                <?php } ?>
+            </table>
+        </div>
+    </div>
+    <?php } ?>
 
     <?php if (View::can(Permission::MESSAGES_VIEW)) { ?>
     <div class="card">

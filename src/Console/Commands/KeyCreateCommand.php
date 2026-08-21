@@ -8,6 +8,7 @@ use Mailer\Console\Command;
 use Mailer\Repository\ProjectRepository;
 use Mailer\Repository\TransportRepository;
 use Mailer\Repository\UserRepository;
+use Mailer\Repository\WebhookSubscriptionRepository;
 
 /**
  * создать проект и выдать ключ.
@@ -70,12 +71,24 @@ final class KeyCreateCommand extends Command
             'transport_id'    => $transportId,
             'rate_limit_hour' => (int) ($this->options['limit-hour'] ?? 0),
             'rate_limit_day'  => (int) ($this->options['limit-day'] ?? 0),
-            'webhook_url'     => $this->options['webhook'] ?? null,
             'default_from_email' => $this->options['from'] ?? null,
             'default_from_name'  => $this->options['from-name'] ?? null,
         ]);
 
         $this->line('Проект создан: ' . $name);
+
+        $webhook = trim((string) ($this->options['webhook'] ?? ''));
+        if ($webhook !== '') {
+            // Без списка событий подписка получает все — так же, как из панели
+            (new WebhookSubscriptionRepository())->create([
+                'project_id' => (int) $created['project']['id'],
+                'name'       => 'Вебхук проекта',
+                'url'        => $webhook,
+            ]);
+
+            $this->line('Вебхук на все события: ' . $webhook);
+        }
+
         $this->line('API-ключ (сохраните, он больше не покажется):');
         $this->line('  ' . $created['key']);
 

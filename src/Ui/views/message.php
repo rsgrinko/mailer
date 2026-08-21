@@ -25,6 +25,7 @@ declare(strict_types=1);
 use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
+use Mailer\Webhook\Event as WebhookEvent;
 
 $id        = (int) $message['id'];
 $addresses = static fn (array $list): string => implode(', ', array_map(
@@ -246,15 +247,16 @@ $canManage = $allowed && View::can(Permission::MESSAGES_MANAGE);
         <h2>Вебхуки по этому письму</h2>
         <div class="table-wrap">
             <table class="list">
-                <tr class="head"><th>Событие</th><th>Статус</th><th class="hide-sm">Адрес</th><th class="hide-sm">Попытки</th><th>Ответ</th><th>Когда</th></tr>
+                <tr class="head"><th>Событие</th><th>Статус</th><th class="hide-sm">Адрес</th><th class="hide-sm">Попытки</th><th>Ответ</th><th>Когда</th><th></th></tr>
                 <?php foreach ($webhooks as $hook) { ?>
                     <tr>
-                        <td><?= View::e((string) $hook['event']) ?></td>
+                        <td class="small"><?= View::e(WebhookEvent::label((string) $hook['event'])) ?></td>
                         <td><span class="badge <?= View::e((string) $hook['status']) ?>"><?= View::e(View::webhookStatus((string) $hook['status'])) ?></span></td>
                         <td class="small mono hide-sm"><?= View::e(Str::limit((string) $hook['url'], 50)) ?></td>
                         <td class="small hide-sm"><?= (int) $hook['attempts'] ?></td>
                         <td class="small"><?= View::e((string) ($hook['response_code'] ?? '—')) ?></td>
                         <td class="small"><?= View::e(View::date((string) $hook['created_at'])) ?></td>
+                        <td><a href="<?= View::e(View::route('ui.webhooks.show', ['id' => $hook['id']])) ?>">открыть</a></td>
                     </tr>
                 <?php } ?>
             </table>

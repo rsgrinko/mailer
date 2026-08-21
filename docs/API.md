@@ -332,40 +332,112 @@ GET /api/v1/metrics
 
 ## Вебхуки
 
-Если у проекта задан адрес вебхука, после отправки или окончательной неудачи сервис шлёт
-туда POST с JSON:
+Вебхук — это подписка проекта на события его писем: адрес, секрет подписи и список
+событий. Заводятся они в панели (**Вебхуки → Вебхуки проектов**, или из карточки
+проекта), одному проекту можно завести сколько угодно — например, боевой приёмник на
+все события и отдельный на одни отказы.
+
+### События
+
+| Событие | Когда |
+|---------|-------|
+| `message.queued` | письмо принято в очередь |
+| `message.sent` | письмо ушло получателю |
+| `message.failed` | попытки кончились, письмо не отправлено |
+| `message.retry` | попытка не удалась, письмо вернулось в очередь |
+| `message.canceled` | письмо отменено до отправки |
+| `message.suppressed` | получатели закрыты стоп-листом |
+| `message.bounced` | сервер получателя вернул отказ |
+| `recipient.unsubscribed` | получатель нажал «отписаться» |
+| `ping` | проверка связи кнопкой из панели |
+
+Пустой список событий у подписки означает «все», включая те, что появятся позже.
+
+### Тело запроса
+
+Тело одинаковое у всех событий: конверт с тем, что случилось, и данными внутри.
 
 ```json
 {
-  "event": "sent",
-  "message_id": "c744d95c-...",
-  "status": "sent",
-  "subject": "Заказ №1024 оформлен",
-  "to": ["user@example.com"],
-  "tag": null,
-  "timestamp": 1787055448,
-  "info": "2.0.0 Ok: queued on ...",
-  "transport": "yandex"
+  "id": "9f1c3a5e-2f4b-4c1a-9d7e-3b2a1c0d4e5f",
+  "event": "message.sent",
+  "occurred_at": "2026-08-21T14:37:28+03:00",
+  "project": { "id": 3, "name": "интернет-магазин" },
+  "data": {
+    "message": {
+      "id": "c744d95c-...",
+      "status": "sent",
+      "subject": "Заказ №1024 оформлен",
+      "from": "shop@example.com",
+      "to": ["user@example.com"],
+      "cc": [],
+      "tag": "orders",
+      "template": null,
+      "transport": "yandex",
+      "source": "api",
+      "attempts": 1,
+      "created_at": "2026-08-21T14:37:12+03:00",
+      "sent_at": "2026-08-21T14:37:28+03:00"
+    },
+    "info": "2.0.0 Ok: queued on ..."
+  }
 }
 ```
 
-Заголовки запроса:
+`data.message` есть у всех событий про письмо. Рядом с ним лежит то, что относится к
+самому событию: `error` и `attempts` у `message.failed`, `next_try_in` у `message.retry`,
+`recipient` и `answer` у `message.bounced`, `recipients` у `message.suppressed`,
+`email` у `recipient.unsubscribed` (письма у него нет, поэтому нет и `data.message`).
+
+`id` — идентификатор доставки. Повтор приходит с тем же `id`, по нему и делается
+идемпотентность: если такой уже обработан, второй раз обрабатывать не нужно.
+
+### Заголовки и подпись
 
 ```
-X-Mailer-Event: sent
-X-Mailer-Signature: sha256=<hmac от тела запроса на секрете проекта>
+X-Mailer-Event: message.sent
+X-Mailer-Delivery: 9f1c3a5e-2f4b-4c1a-9d7e-3b2a1c0d4e5f
+X-Mailer-Timestamp: 1787055448
+X-Mailer-Attempt: 1
+X-Mailer-Signature: t=1787055448,v1=<hmac-sha256>
 ```
 
-Проверка подписи на принимающей стороне:
+Подписывается строка «время.тело» — время входит в подпись, поэтому перехваченный
+запрос нельзя переиграть позже: сверьте `t` с текущим временем и отбросьте старое.
 
 ```php
-$expected = 'sha256=' . hash_hmac('sha256', file_get_contents('php://input'), $secret);
+$body   = (string) file_get_contents('php://input');
+$header = $_SERVER['HTTP_X_MAILER_SIGNATURE'] ?? '';
 
-if (!hash_equals($expected, $_SERVER['HTTP_X_MAILER_SIGNATURE'] ?? '')) {
+if (preg_match('/t=(\d+),v1=([0-9a-f]{64})/', $header, $m) !== 1) {
+    http_response_code(403);
+    exit;
+}
+
+[$all, $timestamp, $signature] = $m;
+
+// Запрос старше пяти минут не принимаем
+if (abs(time() - (int) $timestamp) > 300) {
+    http_response_code(403);
+    exit;
+}
+
+if (!hash_equals(hash_hmac('sha256', $timestamp . '.' . $body, $secret), $signature)) {
     http_response_code(403);
     exit;
 }
 ```
 
+Готовый приёмник — `integrations/php-sdk/examples/webhook-receiver.php`.
+
 Ответ 2xx считается успехом. Иначе сервис повторит доставку с растущими интервалами
-(до пяти раз по умолчанию).
+(по умолчанию до пяти раз: 30 с, 2 мин, 10 мин, 30 мин, 2 ч). Что именно ушло и что
+ответил ваш сервер — видно в панели, в карточке доставки.
+
+### Прежний формат
+
+Подписки, заведённые до конверта, продолжают получать старое плоское тело
+(`event`, `message_id`, `status`, `subject`, `to`, `tag`, `timestamp`) с прежними
+именами событий `sent` и `failed` и прежней подписью `X-Mailer-Signature: sha256=<hmac
+от тела>`. Формат этот застыл: событий в нём два, времени с часовым поясом нет. Новым
+приёмникам он не нужен, переключается версия в форме вебхука.

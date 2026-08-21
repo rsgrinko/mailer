@@ -90,15 +90,34 @@ function httpFixtures(): array
     // Роль берём существующую: страница /ui/roles/{id} должна открываться на живой записи
     $role = (array) (new RoleRepository())->admin();
 
+    // Вебхук проекта и доставка по нему: у страниц раздела должны быть живые записи
+    $subscription = (new Mailer\Repository\WebhookSubscriptionRepository())->create([
+        'project_id' => (int) $project['id'],
+        'name'       => 'http-тест-вебхук',
+        'url'        => 'http://127.0.0.1:9/hook',
+    ]);
+
+    $delivery = (new Mailer\Repository\WebhookRepository())->enqueue([
+        'uuid'            => Mailer\Support\Str::uuid(),
+        'project_id'      => (int) $project['id'],
+        'subscription_id' => $subscription,
+        'message_id'      => (int) $message['id'],
+        'url'             => 'http://127.0.0.1:9/hook',
+        'event'           => Mailer\Webhook\Event::MESSAGE_SENT,
+        'payload'         => ['data' => ['message' => ['id' => (string) $message['uuid']]]],
+    ]);
+
     $fixtures = [
-        'key'       => $key,
-        'role'      => (int) ($role['id'] ?? 0),
-        'project'   => (int) $project['id'],
-        'transport' => $transport,
-        'template'  => $template,
-        'user'      => (int) $user['id'],
-        'message'   => (int) $message['id'],
-        'uuid'      => (string) $message['uuid'],
+        'key'          => $key,
+        'role'         => (int) ($role['id'] ?? 0),
+        'project'      => (int) $project['id'],
+        'transport'    => $transport,
+        'template'     => $template,
+        'user'         => (int) $user['id'],
+        'message'      => (int) $message['id'],
+        'uuid'         => (string) $message['uuid'],
+        'subscription' => $subscription,
+        'webhook'      => $delivery,
     ];
 
     return $fixtures;
@@ -128,7 +147,17 @@ test('все GET-страницы панели открываются', function
         );
 
         // Идентификаторы у каждого раздела свои
-        foreach (['transports' => 'transport', 'projects' => 'project', 'templates' => 'template', 'users' => 'user', 'roles' => 'role'] as $section => $key) {
+        $sections = [
+            'transports'    => 'transport',
+            'projects'      => 'project',
+            'templates'     => 'template',
+            'users'         => 'user',
+            'roles'         => 'role',
+            'webhooks'      => 'webhook',
+            'subscriptions' => 'subscription',
+        ];
+
+        foreach ($sections as $section => $key) {
             if (str_starts_with($route->pattern, '/ui/' . $section)) {
                 $path = str_replace((string) $ids['message'], (string) $ids[$key], $path);
             }
