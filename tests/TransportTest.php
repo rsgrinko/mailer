@@ -237,3 +237,41 @@ test('набор по кругу с транспортами из базы хо�
         }
     });
 });
+
+test('секреты транспорта шифруются по общему списку', function (): void {
+    withOwnDatabase(static function (Mailer\Storage\Database $db): void {
+        withConfig(['app.key' => Mailer\Security\Crypto::generateKey()], static function () use ($db): void {
+            $transports = new TransportRepository();
+
+            // Настройки с именами из SECRET_KEYS шифруются независимо от типа транспорта:
+            // новому транспорту достаточно назвать ключ провайдера api_key
+            $id = $transports->create([
+                'name'     => 'секретный',
+                'type'     => 'smtp',
+                'settings' => [
+                    'host'       => 'smtp.example.com',
+                    'password'   => 'пароль-smtp',
+                    'api_key'    => 'ключ-провайдера',
+                    'secret_key' => 'подпись-запросов',
+                    'token'      => 'токен-доступа',
+                ],
+            ]);
+
+            $raw = (string) ((array) $db->selectOne('SELECT settings FROM transports WHERE id = :id', ['id' => $id]))['settings'];
+
+            foreach (['пароль-smtp', 'ключ-провайдера', 'подпись-запросов', 'токен-доступа'] as $secret) {
+                assertNotContains($secret, $raw, 'секрет «' . $secret . '» не должен лежать в базе открытым');
+            }
+
+            assertContains('smtp.example.com', $raw, 'а обычные настройки шифровать незачем');
+
+            // Обратно читаются как есть — транспорту достаётся уже расшифрованное
+            $settings = (array) ((array) $transports->find($id))['settings'];
+
+            assertSame('пароль-smtp', (string) $settings['password']);
+            assertSame('ключ-провайдера', (string) $settings['api_key']);
+            assertSame('подпись-запросов', (string) $settings['secret_key']);
+            assertSame('токен-доступа', (string) $settings['token']);
+        });
+    });
+});

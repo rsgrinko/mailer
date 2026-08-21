@@ -17,6 +17,15 @@ final class TransportRepository
     /** Типы транспортов, которые умеет сервис */
     public const TYPES = ['smtp', 'sendmail', 'log', 'null', 'failover', 'roundrobin'];
 
+    /**
+     * Настройки, которые нельзя держать в базе открытыми.
+     *
+     * Список общий на все типы: новому транспорту с ключом провайдера достаточно
+     * назвать настройку одним из этих имён, и она зашифруется сама. Забытый ключ —
+     * это пароль от чужой почты в открытом виде, поэтому лучше так, чем «не забыть».
+     */
+    public const SECRET_KEYS = ['password', 'api_key', 'secret_key', 'token'];
+
     private Database $db;
 
     public function __construct(?Database $db = null)
@@ -269,14 +278,16 @@ final class TransportRepository
     }
 
     /**
-     * Настройки в JSON, пароль шифруем.
+     * Настройки в JSON, секреты шифруем.
      *
      * @param array<string, mixed> $settings
      */
     private function encodeSettings(array $settings): string
     {
-        if (isset($settings['password']) && is_string($settings['password']) && $settings['password'] !== '') {
-            $settings['password'] = Crypto::encrypt($settings['password']);
+        foreach (self::SECRET_KEYS as $key) {
+            if (isset($settings[$key]) && is_string($settings[$key]) && $settings[$key] !== '') {
+                $settings[$key] = Crypto::encrypt($settings[$key]);
+            }
         }
 
         if (isset($settings['dkim']['private_key']) && is_string($settings['dkim']['private_key']) && $settings['dkim']['private_key'] !== '') {
@@ -296,8 +307,10 @@ final class TransportRepository
     {
         $settings = (array) json_decode((string) ($row['settings'] ?? '{}'), true);
 
-        if (isset($settings['password']) && is_string($settings['password'])) {
-            $settings['password'] = Crypto::decrypt($settings['password']);
+        foreach (self::SECRET_KEYS as $key) {
+            if (isset($settings[$key]) && is_string($settings[$key])) {
+                $settings[$key] = Crypto::decrypt($settings[$key]);
+            }
         }
 
         if (isset($settings['dkim']['private_key']) && is_string($settings['dkim']['private_key'])) {
