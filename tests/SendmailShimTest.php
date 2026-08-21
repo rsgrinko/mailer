@@ -282,7 +282,7 @@ test('недоступный сервис — временная ошибка, �
         $result = runShim($command, ['-t'], shimLetter(), [
             'MAILER_URL'     => 'http://127.0.0.1:9',
             'MAILER_KEY'     => 'mlr_ключ_ключ',
-            'MAILER_TIMEOUT' => '2',
+            'MAILER_TIMEOUT' => '1',
         ]);
 
         assertSame(75, $result['code'], 'шим ' . $kind . ' должен вернуть 75, чтобы письмо повторили');
