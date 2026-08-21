@@ -10,6 +10,7 @@ declare(strict_types=1);
  * @var array<int, array<string, mixed>> $projects
  * @var array<int, array<string, mixed>> $transports
  * @var array<string, int> $counts
+ * @var array<int, array<string, string>> $suppressed id письма => [адрес => причина]
  */
 
 use Mailer\Domain\Permission;
@@ -124,7 +125,11 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
             </tr>
 
             <?php foreach ($result['items'] as $row) { ?>
-                <?php $to = array_column(json_decode((string) ($row['to_json'] ?? '[]'), true) ?: [], 'email'); ?>
+                <?php
+                $to = array_column(json_decode((string) ($row['to_json'] ?? '[]'), true) ?: [], 'email');
+                // Закрытых стоп-листом в самом письме нет: их вычеркнули на приёме
+                $blocked = array_keys($suppressed[(int) $row['id']] ?? []);
+                ?>
                 <tr>
                     <td class="nowrap small">
                         <?= View::e(View::date((string) $row['created_at'])) ?><br>
@@ -145,7 +150,15 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                         <?php } ?>
                         <div class="mono muted small hide-sm"><?= View::e((string) $row['uuid']) ?></div>
                     </td>
-                    <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
+                    <td class="mono small">
+                        <?= View::e(Str::limit(implode(', ', $to), 40)) ?>
+                        <?php if ($blocked !== []) { ?>
+                            <div class="muted" title="Адрес в стоп-листе — письмо ему не отправлялось">
+                                <?= View::e(Str::limit(implode(', ', $blocked), 40)) ?>
+                                <span class="badge suppressed">в стоп-листе</span>
+                            </div>
+                        <?php } ?>
+                    </td>
                     <td class="small hide-sm">
                         <?php $projectId = (int) ($row['project_id'] ?? 0); ?>
                         <?php if (isset($projectNames[$projectId]) && View::can(Permission::PROJECTS_VIEW)) { ?>

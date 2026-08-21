@@ -206,6 +206,44 @@ test('API открывает свой адрес, но не общий', functio
     $list->delete($own);
 });
 
+test('панель показывает, кому письмо не ушло из-за стоп-листа', function (): void {
+    Mailer\Support\Config::set('ui.auth', false);
+
+    $ids  = suppressionFixtures();
+    $list = new SuppressionRepository();
+    $id   = $list->block('vidno@example.com');
+
+    $accepted = (new MailService())->accept([
+        'to'        => 'vidno@example.com',
+        'subject'   => 'Кому — видно даже так',
+        'text'      => 'Текст',
+        'transport' => 'стоп-лист-null',
+    ], $ids['project']);
+
+    $kernel = new Mailer\Ui\UiKernel();
+
+    // В самом письме получателей не осталось, но карточка и список берут их из истории.
+    // Смотрим именно графу «Кому»: в истории событий адрес виден и без этого
+    $card = $kernel->handle(httpRequest('GET', '/ui/messages/' . (int) $accepted['id']));
+
+    assertSame(200, $card->status());
+
+    $body  = $card->body();
+    $start = strpos($body, '<dt>Кому</dt>');
+    $end   = $start === false ? false : strpos($body, '</dd>', $start);
+    $cell  = $start === false || $end === false ? '' : substr($body, $start, $end - $start);
+
+    assertContains('vidno@example.com', $cell, 'в графе «Кому» должно быть видно, кому не ушло');
+
+    $index = $kernel->handle(httpRequest('GET', '/ui/messages', [], [], ['search' => 'Кому — видно даже так']));
+
+    assertSame(200, $index->status());
+    assertContains('vidno@example.com', $index->body(), 'в списке тоже');
+
+    (new MessageRepository())->delete((int) $accepted['id']);
+    $list->delete($id);
+});
+
 test('в стоп-лист идёт отказ по ящику, а не любой 5xx', function (): void {
     // Ящика нет, домена нет, ящик отключён — адрес закрываем
     assertTrue(SuppressionRepository::isHardBounce('SMTP RCPT TO: сервер ответил 550 5.1.1 <a@b.ru>: Recipient address rejected: User unknown'));

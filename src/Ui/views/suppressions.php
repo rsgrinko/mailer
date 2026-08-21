@@ -15,12 +15,10 @@ use Mailer\Domain\Permission;
 use Mailer\Repository\SuppressionRepository;
 use Mailer\Ui\View;
 
-$reasons = [
-    SuppressionRepository::BOUNCE      => 'отказ сервера',
-    SuppressionRepository::COMPLAINT   => 'жалоба на спам',
-    SuppressionRepository::UNSUBSCRIBE => 'отписка',
-    SuppressionRepository::MANUAL      => 'закрыт вручную',
-];
+$reasons = [];
+foreach (SuppressionRepository::REASONS as $reason) {
+    $reasons[$reason] = View::reason($reason);
+}
 
 $projectNames = [];
 foreach ($projects as $project) {

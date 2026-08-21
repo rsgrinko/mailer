@@ -89,6 +89,9 @@ final class MessagesController
             'projects'   => $this->projects->all($scope),
             'transports' => $this->transports->all(false, $scope),
             'counts'     => $this->messages->countByStatus($scope),
+            // У письма, вычеркнутого стоп-листом, своих получателей не осталось —
+            // без этого в списке пустая графа «Кому»
+            'suppressed' => $this->events->suppressedRecipients(array_column($result['items'], 'id')),
         ], 'Письма'));
     }
 
@@ -137,6 +140,7 @@ final class MessagesController
             'attachments' => $this->messages->decodeArray($row['attachments_json'] ?? null),
             'events'      => $events,
             'senderUsed'  => $this->senderUsed($row, $events),
+            'suppressed'  => $this->events->suppressedRecipients([$id])[$id] ?? [],
             'project'     => $row['project_id'] !== null ? $this->projects->find((int) $row['project_id'], $scope) : null,
             'transport'   => $row['transport_id'] !== null ? $this->transports->find((int) $row['transport_id'], $scope) : null,
             'webhooks'    => $this->webhooks->paginate(['message_id' => $id], 1, 20, $scope)['items'],

@@ -15,6 +15,7 @@ declare(strict_types=1);
  * @var array<int, array<string, mixed>> $attachments
  * @var array<int, array<string, mixed>> $events
  * @var array{was: string, now: string}|null $senderUsed
+ * @var array<string, string> $suppressed адреса, вычеркнутые стоп-листом: адрес => причина
  * @var array<string, mixed>|null $project
  * @var array<string, mixed>|null $transport
  * @var array<int, array<string, mixed>> $webhooks
@@ -113,7 +114,17 @@ $canManage = $allowed && View::can(Permission::MESSAGES_MANAGE);
                     </div>
                 <?php } ?>
             </dd>
-            <dt>Кому</dt><dd><?= View::e($addresses($to)) ?></dd>
+            <dt>Кому</dt>
+            <dd>
+                <?= View::e($addresses($to)) ?>
+                <?php foreach ($suppressed as $email => $reason) { ?>
+                    <div class="small">
+                        <span class="mono"><?= View::e((string) $email) ?></span>
+                        <span class="badge suppressed">в стоп-листе</span>
+                        <?= View::e(View::reason((string) $reason)) ?>
+                    </div>
+                <?php } ?>
+            </dd>
             <?php if ($cc !== []) { ?><dt>Копия</dt><dd><?= View::e($addresses($cc)) ?></dd><?php } ?>
             <?php if ($bcc !== []) { ?><dt>Скрытая копия</dt><dd><?= View::e($addresses($bcc)) ?></dd><?php } ?>
             <?php if (($message['reply_to'] ?? null) !== null) { ?><dt>Ответ на</dt><dd><?= View::e((string) $message['reply_to']) ?></dd><?php } ?>

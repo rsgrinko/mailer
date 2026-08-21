@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mailer\Ui;
 
 use Mailer\Http\Router;
+use Mailer\Repository\SuppressionRepository;
 use Mailer\Support\Config;
 use Mailer\Support\MailerException;
 
@@ -137,6 +138,20 @@ final class View
     /**
      * Откуда пришло письмо.
      */
+    /**
+     * Причина, по которой адрес закрыт стоп-листом.
+     */
+    public static function reason(string $reason): string
+    {
+        return match ($reason) {
+            SuppressionRepository::BOUNCE      => 'отказ сервера',
+            SuppressionRepository::COMPLAINT   => 'жалоба на спам',
+            SuppressionRepository::UNSUBSCRIBE => 'отписка',
+            SuppressionRepository::MANUAL      => 'закрыт вручную',
+            default                            => $reason,
+        };
+    }
+
     public static function source(string $source): string
     {
         return match ($source) {

@@ -66,6 +66,55 @@ final class EventRepository
     }
 
     /**
+     * Кого у этих писем вычеркнул стоп-лист. Закрытые адреса убираются из письма
+     * ещё на приёме — иначе воркер бы им написал, — и в самом письме их нет.
+     * Список и карточка берут их отсюда, потому что письму со статусом
+     * suppressed иначе нечего показать в графе «Кому».
+     *
+     * Одним запросом на страницу списка, а не по запросу на строку.
+     *
+     * @param array<int, int> $messageIds
+     * @return array<int, array<string, string>> id письма => [адрес => причина]
+     */
+    public function suppressedRecipients(array $messageIds): array
+    {
+        $messageIds = array_values(array_unique(array_map('intval', $messageIds)));
+
+        if ($messageIds === []) {
+            return [];
+        }
+
+        // Своё имя каждому идентификатору: повтор имени MySQL не принимает
+        $names  = [];
+        $params = ['type' => self::SUPPRESSED];
+        foreach ($messageIds as $index => $messageId) {
+            $name          = 'sup_' . $index;
+            $names[]       = ':' . $name;
+            $params[$name] = $messageId;
+        }
+
+        $rows = $this->db->select(
+            'SELECT message_id, meta FROM message_events'
+            . ' WHERE type = :type AND message_id IN (' . implode(', ', $names) . ')'
+            . ' ORDER BY id',
+            $params
+        );
+
+        $result = [];
+        foreach ($rows as $row) {
+            $meta = $row['meta'] === null || $row['meta'] === ''
+                ? []
+                : (array) json_decode((string) $row['meta'], true);
+
+            foreach ((array) ($meta['recipients'] ?? []) as $email => $reason) {
+                $result[(int) $row['message_id']][(string) $email] = (string) $reason;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Последние события по всем письмам — лента на дашборде.
      *
      * @return array<int, array<string, mixed>>
