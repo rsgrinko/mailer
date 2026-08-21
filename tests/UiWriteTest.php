@@ -460,3 +460,83 @@ test('себя из панели не удалить', function (): void {
         assertNotNull((new UserRepository())->find($id), 'пользователь не должен удалить сам себя');
     });
 });
+
+test('права обычной роли правятся формой', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $roles = new RoleRepository();
+
+        assertSame(302, uiPost('/ui/roles/save', [
+            'name'        => 'форма-роль-правка',
+            'permissions' => [Mailer\Domain\Permission::MESSAGES_VIEW],
+        ])->status());
+
+        $role = assertNotNull($roles->findByName('форма-роль-правка'), 'роль не завелась');
+        $id   = (int) $role['id'];
+
+        // Добавляем право и переименовываем — то и другое должно сохраниться
+        assertSame(302, uiPost('/ui/roles/save', [
+            'id'          => $id,
+            'name'        => 'форма-роль-правленая',
+            'permissions' => [
+                Mailer\Domain\Permission::MESSAGES_VIEW,
+                Mailer\Domain\Permission::TEMPLATES_VIEW,
+                Mailer\Domain\Permission::TEMPLATES_MANAGE,
+            ],
+        ])->status());
+
+        $saved = (array) $roles->find($id);
+
+        assertSame('форма-роль-правленая', (string) $saved['name'], 'имя роли не сохранилось');
+        assertCount(3, (array) $saved['permissions'], 'права роли не сохранились');
+        assertTrue(
+            in_array(Mailer\Domain\Permission::TEMPLATES_MANAGE, (array) $saved['permissions'], true),
+            'добавленное право должно записаться'
+        );
+
+        // Снимаем все галки — роль остаётся, но без прав
+        assertSame(302, uiPost('/ui/roles/save', ['id' => $id, 'name' => 'форма-роль-правленая'])->status());
+        assertCount(0, (array) ((array) $roles->find($id))['permissions'], 'снятые права должны сняться');
+
+        uiPost('/ui/roles/' . $id . '/delete');
+    });
+});
+
+test('роль пользователя меняется формой', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $roles = new RoleRepository();
+        $users = new UserRepository();
+
+        uiPost('/ui/roles/save', ['name' => 'форма-роль-выдача', 'permissions' => [Mailer\Domain\Permission::MESSAGES_VIEW]]);
+        $role = (array) $roles->findByName('форма-роль-выдача');
+
+        uiPost('/ui/users/save', [
+            'login'           => 'smena-roli',
+            'password'        => 'parol123',
+            'password_repeat' => 'parol123',
+            'active'          => 'on',
+            'role_id'         => (int) $role['id'],
+        ]);
+
+        $user = assertNotNull($users->findByLogin('smena-roli'), 'пользователь не завёлся');
+        assertSame((int) $role['id'], (int) $user['role_id'], 'роль при заведении не выдалась');
+
+        // Меняем роль на встроенную
+        $admin = (array) $roles->admin();
+
+        assertSame(302, uiPost('/ui/users/save', [
+            'id'      => (int) $user['id'],
+            'login'   => 'smena-roli',
+            'active'  => 'on',
+            'role_id' => (int) $admin['id'],
+        ])->status());
+
+        assertSame(
+            (int) $admin['id'],
+            (int) ((array) $users->find((int) $user['id']))['role_id'],
+            'роль пользователя должна смениться'
+        );
+
+        $users->delete((int) $user['id'], true);
+        uiPost('/ui/roles/' . (int) $role['id'] . '/delete');
+    });
+});

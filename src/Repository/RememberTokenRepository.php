@@ -24,6 +24,16 @@ final class RememberTokenRepository
     private const SELECTOR_BYTES  = 8;
     private const VALIDATOR_BYTES = 32;
 
+    /**
+     * Сколько секунд после смены validator принимается прежний.
+     *
+     * Браузер открывает страницу не одним запросом: за ней идут ещё несколько, и все
+     * с той же кукой. Первый успевает сменить validator, остальные приносят старый —
+     * без этого окна они выглядели бы кражей и гасили токен, выкидывая человека
+     * из панели на ровном месте. Кража через час в окно не попадает.
+     */
+    private const GRACE_SECONDS = 60;
+
     private Database $db;
 
     public function __construct(?Database $db = null)
@@ -80,15 +90,45 @@ final class RememberTokenRepository
             return null;
         }
 
-        if (!hash_equals((string) $row['token_hash'], self::hash($validator))) {
-            // Селектор верный, а validator нет — куку либо подделали, либо она устарела
-            // после ротации. Оставлять такую запись живой незачем
-            $this->delete($selector);
-
-            return null;
+        if (hash_equals((string) $row['token_hash'], self::hash($validator))) {
+            return $row;
         }
 
-        return $row;
+        // Прежний validator принимаем ещё немного времени: это свои же параллельные
+        // запросы, а не кража. Токен при этом не меняем — его уже сменил первый запрос
+        if ($this->withinGrace($row, $validator)) {
+            $row['grace'] = true;
+
+            return $row;
+        }
+
+        // Селектор верный, а validator не тот и не прежний — куку либо подделали,
+        // либо ей воспользовался кто-то ещё. Гасим токен целиком: настоящему
+        // владельцу придётся войти паролем, и он это заметит
+        $this->delete($selector);
+
+        return null;
+    }
+
+    /**
+     * Пришёл ли прежний validator, и не слишком ли поздно.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function withinGrace(array $row, string $validator): bool
+    {
+        $previous = (string) ($row['previous_hash'] ?? '');
+        $rotated  = (string) ($row['rotated_at'] ?? '');
+
+        if ($previous === '' || $rotated === '') {
+            return false;
+        }
+
+        if (!hash_equals($previous, self::hash($validator))) {
+            return false;
+        }
+
+        return time() - (int) strtotime($rotated) <= self::GRACE_SECONDS;
     }
 
     /**
@@ -101,7 +141,10 @@ final class RememberTokenRepository
      */
     public function rotate(int $id, string $ip = ''): string
     {
-        $row = $this->db->selectOne('SELECT selector FROM remember_tokens WHERE id = :id', ['id' => $id]);
+        $row = $this->db->selectOne(
+            'SELECT selector, token_hash FROM remember_tokens WHERE id = :id',
+            ['id' => $id]
+        );
 
         if ($row === null) {
             return '';
@@ -110,9 +153,12 @@ final class RememberTokenRepository
         $validator = bin2hex(random_bytes(self::VALIDATOR_BYTES));
 
         $this->db->update('remember_tokens', [
-            'token_hash'   => self::hash($validator),
-            'ip'           => $ip === '' ? null : mb_substr($ip, 0, 45),
-            'last_used_at' => Database::now(),
+            'token_hash' => self::hash($validator),
+            // Прежний оставляем на короткое окно — для своих параллельных запросов
+            'previous_hash' => (string) $row['token_hash'],
+            'rotated_at'    => Database::now(),
+            'ip'            => $ip === '' ? null : mb_substr($ip, 0, 45),
+            'last_used_at'  => Database::now(),
         ], ['id' => $id]);
 
         return (string) $row['selector'] . ':' . $validator;

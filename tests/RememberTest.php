@@ -171,15 +171,16 @@ test('использованная кука меняется на новую', f
         // и по несошедшемуся секрету станет видно, что кукой пользуется кто-то ещё
         assertSame(explode(':', $first)[0], explode(':', $second)[0], 'selector должен остаться прежним');
 
-        // Старая кука больше не работает и гасит токен целиком: если её украли,
-        // настоящему владельцу придётся войти паролем — и он это заметит
+        // Сразу после смены старая кука ещё принимается — это соседние запросы той же
+        // страницы. А вот когда окно закроется, она гасит токен целиком: проверка на
+        // это отдельным тестом («старая кука после окна снисхождения…»)
         rememberReset();
         $_COOKIE[Auth::REMEMBER_COOKIE] = $first;
 
         (new UiKernel())->handle(httpRequest('GET', '/ui/'));
 
-        assertNull(Auth::user(), 'по старой куке пускать нельзя');
-        assertSame(0, (new RememberTokenRepository())->countForUser((int) $user['id']), 'попытка гасит токен');
+        assertNotNull(Auth::user(), 'свои же параллельные запросы выкидывать нельзя');
+        assertSame(1, (new RememberTokenRepository())->countForUser((int) $user['id']), 'токен остаётся');
 
         rememberReset();
     });
@@ -445,6 +446,67 @@ test('после входа по куке панель работает так �
 
         // И права те же самые
         assertTrue(Mailer\Ui\Auth::viewer()->isAdmin(), 'по куке должен входить тот же администратор');
+
+        rememberReset();
+    });
+});
+
+test('параллельные запросы со старой кукой не выкидывают из панели', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $user   = rememberUser();
+        $cookie = rememberCookieValue(rememberLogin(true));
+        $kernel = new UiKernel();
+
+        // Первый запрос страницы: он и сменит validator
+        rememberReset();
+        $_COOKIE[Auth::REMEMBER_COOKIE] = $cookie;
+
+        $first = $kernel->handle(httpRequest('GET', '/ui/'));
+
+        assertStatus(200, $first);
+        assertTrue(rememberCookieValue($first) !== '', 'первый запрос получает новую куку');
+
+        // Соседние запросы той же страницы браузер отправил одновременно, у них
+        // ещё старая кука — они должны пройти, а не гасить токен
+        foreach (['/ui/messages', '/ui/users', '/ui/roles'] as $path) {
+            rememberReset();
+            $_COOKIE[Auth::REMEMBER_COOKIE] = $cookie;
+
+            $response = $kernel->handle(httpRequest('GET', $path));
+
+            assertStatus(200, $response, 'параллельный запрос ' . $path . ' должен пройти');
+            assertNotNull(Auth::user(), 'и пользователь должен остаться вошедшим');
+            assertSame('', rememberCookieValue($response), 'второй раз куку менять незачем');
+        }
+
+        assertSame(1, (new RememberTokenRepository())->countForUser((int) $user['id']), 'токен должен остаться');
+
+        rememberReset();
+    });
+});
+
+test('старая кука после окна снисхождения по-прежнему гасит токен', function (): void {
+    withConfig(['ui.auth' => true], static function (): void {
+        $user   = rememberUser();
+        $cookie = rememberCookieValue(rememberLogin(true));
+
+        rememberReset();
+        $_COOKIE[Auth::REMEMBER_COOKIE] = $cookie;
+        (new UiKernel())->handle(httpRequest('GET', '/ui/'));
+
+        // Отматываем смену на час назад — окно давно закрылось
+        Database::instance()->execute(
+            'UPDATE remember_tokens SET rotated_at = :old WHERE user_id = :user',
+            ['old' => date('Y-m-d H:i:s', time() - 3600), 'user' => (int) $user['id']]
+        );
+
+        rememberReset();
+        $_COOKIE[Auth::REMEMBER_COOKIE] = $cookie;
+
+        (new UiKernel())->handle(httpRequest('GET', '/ui/'));
+
+        assertNull(Auth::user(), 'старой кукой пользоваться нельзя');
+        assertSame(0, (new RememberTokenRepository())->countForUser((int) $user['id']), 'токен гасится');
 
         rememberReset();
     });

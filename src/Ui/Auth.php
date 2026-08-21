@@ -332,6 +332,13 @@ final class Auth
 
         Csrf::restore($formToken);
 
+        // Запрос пришёл с прежним validator в окно снисхождения: это соседний запрос
+        // той же страницы, токен уже сменил первый из них. Второй раз не меняем и
+        // куку не трогаем — иначе браузер получит две разные и одна из них устареет
+        if ((bool) ($token['grace'] ?? false)) {
+            return $user;
+        }
+
         self::$pendingCookie = [
             'value'   => $tokens->rotate((int) $token['id'], self::ip()),
             'expires' => strtotime((string) $token['expires_at']) ?: time() + self::rememberDays() * 86400,
