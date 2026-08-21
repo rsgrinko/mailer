@@ -1,4 +1,7 @@
 /.env
+# Любые копии настроек: .env.backup, .env.local и подобные — в них те же пароли
+/.env.*
+!/.env.example
 /var/*
 !/var/.gitkeep
 /.idea
