@@ -10,13 +10,25 @@ declare(strict_types=1);
  * @var array<int, array<string, mixed>> $owners пользователи для выбора владельца (только администратору)
  * @var array{hour: int, day: int} $usage
  * @var array<int, array<string, mixed>> $recent
+ * @var bool $editable можно ли править: без права projects.manage проект только показываем
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Security\ApiKey;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 
 $isNew = $project === null;
+
+$transportName = static function (?int $id) use ($transports): string {
+    foreach ($transports as $transport) {
+        if ((int) $transport['id'] === (int) $id) {
+            return (string) $transport['name'];
+        }
+    }
+
+    return '';
+};
 ?>
 <div class="row">
     <h1 style="margin:0"><?= $isNew ? 'Новый проект' : 'Проект «' . View::e((string) $project['name']) . '»' ?></h1>
@@ -24,6 +36,7 @@ $isNew = $project === null;
     <a class="btn" href="<?= View::e(View::route('ui.projects')) ?>">К списку</a>
 </div>
 
+<?php if ($editable) { ?>
 <form method="post" action="<?= View::e(View::route('ui.projects.save')) ?>">
     <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($project['id'] ?? 0) ?>">
@@ -128,6 +141,35 @@ $isNew = $project === null;
         <button class="primary" type="submit">Сохранить</button>
     </div>
 </form>
+<?php } else { ?>
+    <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+            <h2>Основное</h2>
+            <?= View::partial('props', ['rows' => [
+                'Название'                  => $project['name'] ?? '',
+                'Описание'                  => $project['description'] ?? '',
+                'Транспорт проекта'         => $transportName($project['transport_id'] ?? null) ?: 'основной',
+                'Отправитель по умолчанию'  => $project['default_from_email'] ?? '',
+                'Имя отправителя'           => $project['default_from_name'] ?? '',
+                'Проект активен'            => (int) ($project['active'] ?? 0) === 1,
+                'Кнопка «отписаться»'       => (int) ($project['unsubscribe'] ?? 0) === 1,
+            ]]) ?>
+        </div>
+
+        <div class="card">
+            <h2>Лимиты и вебхук</h2>
+            <?= View::partial('props', ['rows' => [
+                'Писем в час'      => (int) ($project['rate_limit_hour'] ?? 0) ?: 'без ограничений',
+                'Писем в сутки'    => (int) ($project['rate_limit_day'] ?? 0) ?: 'без ограничений',
+                'Использовано'     => (int) $usage['hour'] . ' за час, ' . (int) $usage['day'] . ' за сутки',
+                'Адрес вебхука'    => $project['webhook_url'] ?? '',
+                'Секрет подписи'   => ((string) ($project['webhook_secret'] ?? '')) !== '' ? 'задан' : '',
+            ]]) ?>
+            <p class="muted small">Проект доступен вам только на просмотр: права на правку
+                (<span class="mono">projects.manage</span>) у роли нет.</p>
+        </div>
+    </div>
+<?php } ?>
 
 <?php if (!$isNew) { ?>
     <div class="card">
@@ -136,6 +178,7 @@ $isNew = $project === null;
             Текущий ключ: <span class="mono"><?= View::e(ApiKey::mask((string) $project['api_key_prefix'])) ?></span>.
             Полностью ключ хранится только у вас — в базе лежит его хеш.
         </p>
+        <?php if ($editable) { ?>
         <div class="row">
             <form method="post" action="<?= View::e(View::route('ui.projects.action', ['id' => $project['id'], 'action' => 'key'])) ?>" onsubmit="return confirm('Выдать новый ключ? Старый сразу перестанет работать.')">
                 <?= View::csrf() ?>
@@ -151,8 +194,10 @@ $isNew = $project === null;
                 <button class="danger" type="submit">Удалить проект</button>
             </form>
         </div>
+        <?php } ?>
     </div>
 
+    <?php if (View::can(Permission::MESSAGES_VIEW)) { ?>
     <div class="card">
         <h2>Последние письма проекта</h2>
         <div class="table-wrap">
@@ -175,4 +220,5 @@ $isNew = $project === null;
             <a href="<?= View::e(View::route('ui.messages', ['project_id' => (int) $project['id']])) ?>">Все письма проекта</a>
         </div>
     </div>
+    <?php } ?>
 <?php } ?>

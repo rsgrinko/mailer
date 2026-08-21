@@ -10,13 +10,16 @@ declare(strict_types=1);
  * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Security\ApiKey;
 use Mailer\Ui\View;
 ?>
 <div class="row">
     <h1 style="margin:0">Проекты <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::route('ui.projects.new')) ?>">Создать проект</a>
+    <?php if (View::can(Permission::PROJECTS_MANAGE)) { ?>
+        <a class="btn primary" href="<?= View::e(View::route('ui.projects.new')) ?>">Создать проект</a>
+    <?php } ?>
 </div>
 
 <div class="card" style="margin-top:16px">

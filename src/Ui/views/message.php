@@ -22,6 +22,7 @@ declare(strict_types=1);
  * @var array{text: string, html: string} $preview
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 
@@ -44,35 +45,57 @@ $addresses = static fn (array $list): string => implode(', ', array_map(
 $isSent     = (string) $message['status'] === 'sent';
 $isCanceled = (string) $message['status'] === 'canceled';
 ?>
-<div class="card" style="margin-top:16px">
-    <div class="row">
-        <?php if (!$isSent) { ?>
-            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'send'])) ?>">
-                <?= View::csrf() ?>
-                <button class="primary" type="submit">Отправить сейчас</button>
-            </form>
-            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'retry'])) ?>">
-                <?= View::csrf() ?>
-                <button type="submit">Вернуть в очередь</button>
-            </form>
-        <?php } ?>
+<?php
+// Действия из панели могут быть выключены совсем — тогда и кнопок быть не должно
+$allowed   = View::actionsAllowed();
+$canSend   = $allowed && View::can(Permission::MESSAGES_SEND);
+$canManage = $allowed && View::can(Permission::MESSAGES_MANAGE);
+?>
+<?php if ($canSend || $canManage) { ?>
+    <div class="card" style="margin-top:16px">
+        <div class="row">
+            <?php if (!$isSent && $canSend) { ?>
+                <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'send'])) ?>">
+                    <?= View::csrf() ?>
+                    <button class="primary" type="submit">Отправить сейчас</button>
+                </form>
+            <?php } ?>
 
-        <?php if (!$isSent && !$isCanceled) { ?>
-            <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'cancel'])) ?>">
-                <?= View::csrf() ?>
-                <button type="submit">Отменить</button>
-            </form>
-        <?php } ?>
+            <?php if (!$isSent && $canManage) { ?>
+                <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'retry'])) ?>">
+                    <?= View::csrf() ?>
+                    <button type="submit">Вернуть в очередь</button>
+                </form>
+            <?php } ?>
 
-        <a class="btn" href="<?= View::e(View::route('ui.compose', ['copy' => $id])) ?>">Написать похожее</a>
-        <a class="btn" href="<?= View::e(View::route('ui.messages.raw', ['id' => $id])) ?>">Скачать .eml</a>
-        <div class="spacer"></div>
-        <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить письмо вместе с историей и вложениями?')">
-            <?= View::csrf() ?>
-            <button class="danger" type="submit">Удалить</button>
-        </form>
+            <?php if (!$isSent && !$isCanceled && $canManage) { ?>
+                <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'cancel'])) ?>">
+                    <?= View::csrf() ?>
+                    <button type="submit">Отменить</button>
+                </form>
+            <?php } ?>
+
+            <?php if ($canSend) { ?>
+                <a class="btn" href="<?= View::e(View::route('ui.compose', ['copy' => $id])) ?>">Написать похожее</a>
+            <?php } ?>
+            <a class="btn" href="<?= View::e(View::route('ui.messages.raw', ['id' => $id])) ?>">Скачать .eml</a>
+
+            <?php if ($canManage) { ?>
+                <div class="spacer"></div>
+                <form method="post" action="<?= View::e(View::route('ui.messages.action', ['id' => $id, 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить письмо вместе с историей и вложениями?')">
+                    <?= View::csrf() ?>
+                    <button class="danger" type="submit">Удалить</button>
+                </form>
+            <?php } ?>
+        </div>
     </div>
-</div>
+<?php } else { ?>
+    <div class="card" style="margin-top:16px">
+        <div class="row">
+            <a class="btn" href="<?= View::e(View::route('ui.messages.raw', ['id' => $id])) ?>">Скачать .eml</a>
+        </div>
+    </div>
+<?php } ?>
 
 <div class="grid cols-2">
     <div class="card">
@@ -96,16 +119,20 @@ $isCanceled = (string) $message['status'] === 'canceled';
             <dt>Источник</dt><dd><?= View::e(View::source((string) $message['source'])) ?></dd>
             <dt>Проект</dt>
             <dd>
-                <?php if ($project !== null) { ?>
+                <?php if ($project !== null && View::can(Permission::PROJECTS_VIEW)) { ?>
                     <a href="<?= View::e(View::route('ui.projects.show', ['id' => $project['id']])) ?>"><?= View::e($project['name']) ?></a>
+                <?php } elseif ($project !== null) { ?>
+                    <?= View::e($project['name']) ?>
                 <?php } else { ?>
                     <span class="muted">не задан</span>
                 <?php } ?>
             </dd>
             <dt>Транспорт</dt>
             <dd>
-                <?php if ($transport !== null) { ?>
+                <?php if ($transport !== null && View::can(Permission::TRANSPORTS_VIEW)) { ?>
                     <a href="<?= View::e(View::route('ui.transports.show', ['id' => $transport['id']])) ?>"><?= View::e($transport['name']) ?></a>
+                <?php } elseif ($transport !== null) { ?>
+                    <?= View::e($transport['name']) ?>
                 <?php } else { ?>
                     <span class="muted">выбирается при отправке</span>
                 <?php } ?>
@@ -214,7 +241,7 @@ $isCanceled = (string) $message['status'] === 'canceled';
     </details>
 </div>
 
-<?php if ($webhooks !== []) { ?>
+<?php if ($webhooks !== [] && View::can(Permission::WEBHOOKS_VIEW)) { ?>
     <div class="card">
         <h2>Вебхуки по этому письму</h2>
         <div class="table-wrap">

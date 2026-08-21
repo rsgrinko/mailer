@@ -15,6 +15,7 @@ declare(strict_types=1);
  * @var array<string, int> $webhooks
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 
@@ -22,10 +23,16 @@ $max = 1;
 foreach ($daily as $day) {
     $max = max($max, $day['total']);
 }
+
+// Обзор открыт всем вошедшим, но показывать в нём нужно только то, на что есть право
+$seeMessages   = View::can(Permission::MESSAGES_VIEW);
+$seeWebhooks   = View::can(Permission::WEBHOOKS_VIEW);
+$seeTransports = View::can(Permission::TRANSPORTS_VIEW);
 ?>
 <h1>Обзор</h1>
 
 <div class="grid cols-4">
+    <?php if ($seeMessages) { ?>
     <div class="card stat">
         <div class="label">В очереди</div>
         <div class="value"><?= (int) $stats['queue_ready'] ?></div>
@@ -41,6 +48,7 @@ foreach ($daily as $day) {
         <div class="value"><?= (int) $stats['today_failed'] ?></div>
         <div class="small muted">всего: <?= (int) ($stats['by_status']['failed'] ?? 0) ?></div>
     </div>
+    <?php } ?>
     <div class="card stat">
         <div class="label">Воркер</div>
         <div class="value">
@@ -62,7 +70,9 @@ foreach ($daily as $day) {
     </div>
 </div>
 
+<?php if ($seeMessages || $seeWebhooks) { ?>
 <div class="grid cols-2">
+    <?php if ($seeMessages) { ?>
     <div class="card chart-card">
         <h2>Письма за две недели</h2>
         <div class="chart">
@@ -79,8 +89,10 @@ foreach ($daily as $day) {
             <?php } ?>
         </div>
     </div>
+    <?php } ?>
 
     <div class="card">
+        <?php if ($seeMessages) { ?>
         <h2>Статусы</h2>
         <div class="counts">
             <?php foreach ($stats['by_status'] as $status => $count) { ?>
@@ -90,8 +102,10 @@ foreach ($daily as $day) {
                 </a>
             <?php } ?>
         </div>
+        <?php } ?>
 
-        <h2 style="margin-top:16px">Вебхуки</h2>
+        <?php if ($seeWebhooks) { ?>
+        <h2 <?= $seeMessages ? 'style="margin-top:16px"' : '' ?>>Вебхуки</h2>
         <div class="counts">
             <?php foreach ($webhooks as $status => $count) { ?>
                 <a class="item" href="<?= View::e(View::route('ui.webhooks', ['status' => $status])) ?>">
@@ -100,10 +114,12 @@ foreach ($daily as $day) {
                 </a>
             <?php } ?>
         </div>
+        <?php } ?>
     </div>
 </div>
+<?php } ?>
 
-<?php if ($failed !== []) { ?>
+<?php if ($failed !== [] && $seeMessages) { ?>
     <div class="card">
         <h2>Последние неудачные письма</h2>
         <div class="table-wrap">
@@ -123,6 +139,7 @@ foreach ($daily as $day) {
     </div>
 <?php } ?>
 
+<?php if ($seeMessages) { ?>
 <div class="grid cols-2">
     <div class="card">
         <h2>Последние письма</h2>
@@ -157,7 +174,9 @@ foreach ($daily as $day) {
         </div>
     </div>
 </div>
+<?php } ?>
 
+<?php if ($seeTransports) { ?>
 <div class="card">
     <h2>Транспорты</h2>
     <div class="table-wrap">
@@ -178,3 +197,11 @@ foreach ($daily as $day) {
         </table>
     </div>
 </div>
+<?php } ?>
+
+<?php if (!$seeMessages && !$seeWebhooks && !$seeTransports) { ?>
+    <div class="card">
+        <p class="muted" style="margin:0">Показывать нечего: у вашей роли нет прав ни на один раздел.
+            Обратитесь к администратору сервиса.</p>
+    </div>
+<?php } ?>

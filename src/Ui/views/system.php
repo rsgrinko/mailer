@@ -17,6 +17,7 @@ declare(strict_types=1);
  * @var array<string, mixed> $php
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Ui\View;
 ?>
 <h1>Состояние сервиса</h1>
@@ -105,6 +106,7 @@ use Mailer\Ui\View;
     </div>
 </div>
 
+<?php if (View::can(Permission::SYSTEM_MANAGE)) { ?>
 <div class="card">
     <h2>Обслуживание</h2>
     <div class="row">
@@ -154,6 +156,7 @@ use Mailer\Ui\View;
         </div>
     </form>
 </div>
+<?php } ?>
 
 <div class="grid cols-2">
     <div class="card">

@@ -59,7 +59,7 @@ final class TemplatesController extends ResourceController
         ], 'Шаблоны'));
     }
 
-    public function form(Request $request, ?int $id, Scope $scope): Response
+    public function form(Request $request, ?int $id, Scope $scope, Viewer $viewer): Response
     {
         $template = $this->requireIfEditing($id, $id === null ? null : $this->templates->find($id, $scope));
 
@@ -88,6 +88,8 @@ final class TemplatesController extends ResourceController
             'variables' => $variables,
             'preview'   => $preview,
             'sample'    => $sample,
+            // Без права на правку шаблон только показываем
+            'editable'  => $viewer->can(Permission::TEMPLATES_MANAGE),
         ], $template === null ? 'Новый шаблон' : 'Шаблон «' . $template['name'] . '»'));
     }
 

@@ -12,6 +12,7 @@ declare(strict_types=1);
  * @var array<string, int> $counts
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 
@@ -147,8 +148,10 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
                     <td class="mono small"><?= View::e(Str::limit(implode(', ', $to), 40)) ?></td>
                     <td class="small hide-sm">
                         <?php $projectId = (int) ($row['project_id'] ?? 0); ?>
-                        <?php if (isset($projectNames[$projectId])) { ?>
+                        <?php if (isset($projectNames[$projectId]) && View::can(Permission::PROJECTS_VIEW)) { ?>
                             <a href="<?= View::e(View::route('ui.projects.show', ['id' => $projectId])) ?>"><?= View::e($projectNames[$projectId]) ?></a>
+                        <?php } elseif (isset($projectNames[$projectId])) { ?>
+                            <?= View::e($projectNames[$projectId]) ?>
                         <?php } else { ?>
                             <span class="muted">—</span>
                         <?php } ?>
@@ -179,6 +182,7 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
     ]) ?>
 </div>
 
+<?php if (View::can(Permission::MESSAGES_MANAGE) && View::actionsAllowed()) { ?>
 <div class="card">
     <h2>Массовые действия</h2>
     <form method="post" action="<?= View::e(View::route('ui.messages.bulk')) ?>" onsubmit="return confirm('Точно применить действие ко всем письмам выбранного статуса?')">
@@ -205,3 +209,4 @@ $sources  = ['api' => 'API', 'sendmail' => 'sendmail', 'smtpd' => 'SMTP-реле
         </div>
     </form>
 </div>
+<?php } ?>

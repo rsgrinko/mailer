@@ -62,9 +62,23 @@ function accessFixtures(): array
     $ownerRole = $roles->create(['name' => 'тест-владелец', 'permissions' => Permission::user()]);
     $emptyRole = $roles->create(['name' => 'тест-без-прав', 'permissions' => []]);
 
+    // Роль «только смотреть»: все разделы видны, но менять в них нечего.
+    // data.all — чтобы видеть чужие записи и не заводить ей своих
+    $watchRole = $roles->create(['name' => 'тест-смотрящий', 'permissions' => [
+        Permission::MESSAGES_VIEW,
+        Permission::PROJECTS_VIEW,
+        Permission::TRANSPORTS_VIEW,
+        Permission::TEMPLATES_VIEW,
+        Permission::SUPPRESSIONS_VIEW,
+        Permission::WEBHOOKS_VIEW,
+        Permission::SYSTEM_VIEW,
+        Permission::DATA_ALL,
+    ]]);
+
     $petr = $users->create(['login' => 'test-petr', 'password' => 'parol123', 'role_id' => $ownerRole]);
     $ivan = $users->create(['login' => 'test-ivan', 'password' => 'parol123', 'role_id' => $ownerRole]);
     $nick = $users->create(['login' => 'test-nick', 'password' => 'parol123', 'role_id' => $emptyRole]);
+    $olga = $users->create(['login' => 'test-olga', 'password' => 'parol123', 'role_id' => $watchRole]);
 
     $created = (new ProjectRepository())->create(['name' => 'проект-петра', 'owner_id' => (int) $petr['id']]);
 
@@ -97,10 +111,11 @@ function accessFixtures(): array
     ], $created['project']);
 
     $fixtures = [
-        'roles'     => [$ownerRole, $emptyRole],
+        'roles'     => [$ownerRole, $emptyRole, $watchRole],
         'petr'      => (int) $petr['id'],
         'ivan'      => (int) $ivan['id'],
         'nick'      => (int) $nick['id'],
+        'olga'      => (int) $olga['id'],
         'project'   => (int) $created['project']['id'],
         'transport' => $transport,
         'shared'    => $shared,
@@ -260,6 +275,121 @@ test('лента событий не теряет свои записи за ч�
     (new MessageRepository())->delete((int) $noise['id']);
 });
 
+test('роль только на просмотр не видит кнопок правки', function (): void {
+    Config::set('ui.auth', true);
+
+    $ids    = accessFixtures();
+    $kernel = new UiKernel();
+
+    accessLogin($ids['olga']);
+
+    // Страница => чего на ней быть не должно
+    $forbidden = [
+        '/ui/projects'                        => ['Создать проект'],
+        '/ui/projects/' . $ids['project']     => ['name="name"', 'Сохранить', 'Выдать новый ключ', 'Удалить проект'],
+        '/ui/templates'                       => ['Создать шаблон'],
+        '/ui/templates/' . $ids['template']   => ['<textarea', 'Сохранить', 'Удалить шаблон'],
+        '/ui/transports'                      => ['Добавить транспорт'],
+        '/ui/transports/' . $ids['transport'] => ['name="host"', 'Сохранить', 'Проверить подключение', 'Удалить транспорт'],
+        '/ui/messages'                        => ['Массовые действия'],
+        '/ui/messages/' . $ids['message']     => ['Отправить сейчас', 'Вернуть в очередь', 'Написать похожее'],
+        '/ui/webhooks'                        => ['Разослать сейчас'],
+        '/ui/system'                          => ['Обслуживание', 'Перезапустить воркер'],
+        '/ui/suppressions'                    => ['Закрыть адрес'],
+    ];
+
+    foreach ($forbidden as $path => $needles) {
+        $response = $kernel->handle(httpRequest('GET', $path));
+
+        assertSame(200, $response->status(), 'страница ' . $path . ' должна открываться на просмотр');
+
+        foreach ($needles as $needle) {
+            assertTrue(
+                !str_contains($response->body(), $needle),
+                'на ' . $path . ' не должно быть «' . $needle . '»: править эта роль не может'
+            );
+        }
+    }
+
+    // Данные при этом видны: просмотр остаётся просмотром
+    assertContains('проект-петра', $kernel->handle(httpRequest('GET', '/ui/projects'))->body());
+    assertContains('шаблон-петра', $kernel->handle(httpRequest('GET', '/ui/templates/' . $ids['template']))->body());
+
+    accessLogout();
+});
+
+test('владелец кнопки правки видит', function (): void {
+    Config::set('ui.auth', true);
+
+    $ids    = accessFixtures();
+    $kernel = new UiKernel();
+
+    accessLogin($ids['petr']);
+
+    // Обратная проверка к предыдущему тесту: с правом кнопки на месте
+    assertContains('Создать проект', $kernel->handle(httpRequest('GET', '/ui/projects'))->body());
+    assertContains('Сохранить', $kernel->handle(httpRequest('GET', '/ui/projects/' . $ids['project']))->body());
+    assertContains('Массовые действия', $kernel->handle(httpRequest('GET', '/ui/messages'))->body());
+    assertContains('Проверить подключение', $kernel->handle(httpRequest('GET', '/ui/transports/' . $ids['transport']))->body());
+
+    accessLogout();
+});
+
+test('обзор показывает только разрешённые разделы', function (): void {
+    Config::set('ui.auth', true);
+
+    $ids    = accessFixtures();
+    $kernel = new UiKernel();
+
+    // У Николая прав нет вовсе: цифры и таблицы ему показывать нечего
+    accessLogin($ids['nick']);
+    $body = $kernel->handle(httpRequest('GET', '/ui/'))->body();
+
+    assertSame(200, $kernel->handle(httpRequest('GET', '/ui/'))->status());
+    assertTrue(!str_contains($body, 'Последние письма'), 'без права на письма их на обзоре быть не должно');
+    assertTrue(!str_contains($body, 'Транспорты</h2>'), 'без права на транспорты их таблицы быть не должно');
+    assertContains('нет прав ни на один раздел', $body);
+
+    // А Ольга смотрит всё
+    accessLogin($ids['olga']);
+    $body = $kernel->handle(httpRequest('GET', '/ui/'))->body();
+
+    assertContains('Последние письма', $body);
+    assertContains('Транспорты</h2>', $body);
+
+    accessLogout();
+});
+
+test('с UI_ALLOW_ACTIONS=false кнопок над письмами нет, а запрос отклоняется', function (): void {
+    Config::set('ui.auth', true);
+    Config::set('ui.allow_actions', false);
+
+    $ids    = accessFixtures();
+    $kernel = new UiKernel();
+
+    accessLogin($ids['petr']);
+
+    $list = $kernel->handle(httpRequest('GET', '/ui/messages'))->body();
+    $card = $kernel->handle(httpRequest('GET', '/ui/messages/' . $ids['message']))->body();
+
+    assertTrue(!str_contains($list, 'Массовые действия'), 'массовых действий быть не должно');
+    assertTrue(!str_contains($card, 'Вернуть в очередь'), 'кнопок над письмом быть не должно');
+
+    // И даже если запрос отправить руками, он ничего не сделает
+    $response = $kernel->handle(httpRequest(
+        'POST',
+        '/ui/messages/bulk',
+        ['x-csrf-token' => Mailer\Ui\Csrf::token()],
+        ['status' => 'sent', 'action' => 'delete']
+    ));
+
+    assertSame(302, $response->status());
+    assertTrue((new MessageRepository())->find($ids['message']) !== null, 'письмо должно остаться на месте');
+
+    Config::set('ui.allow_actions', true);
+    accessLogout();
+});
+
 test('прибираем за собой данные проверок прав', function (): void {
     $ids = accessFixtures();
 
@@ -270,7 +400,7 @@ test('прибираем за собой данные проверок прав'
     (new TransportRepository())->delete($ids['shared']);
 
     $users = new UserRepository();
-    foreach (['petr', 'ivan', 'nick'] as $key) {
+    foreach (['petr', 'ivan', 'nick', 'olga'] as $key) {
         $users->delete($ids[$key], true);
     }
 

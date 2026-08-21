@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mailer\Ui;
 
 use Mailer\Http\Router;
+use Mailer\Support\Config;
 use Mailer\Support\MailerException;
 
 /**
@@ -252,6 +253,15 @@ final class View
     public static function csrf(): string
     {
         return Csrf::field();
+    }
+
+    /**
+     * Разрешены ли действия над письмами (UI_ALLOW_ACTIONS). Выключены — кнопки
+     * повтора, отмены и удаления не показываем: нажать их всё равно нельзя.
+     */
+    public static function actionsAllowed(): bool
+    {
+        return (bool) Config::get('ui.allow_actions', true);
     }
 
     /**

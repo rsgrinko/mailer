@@ -12,6 +12,7 @@ declare(strict_types=1);
  * @var bool $readOnly чужой или общий транспорт: смотреть можно, менять нельзя
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Ui\View;
 
 $settings = (array) ($transport['settings'] ?? []);
@@ -25,6 +26,7 @@ $isNew    = $transport === null;
     <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">К списку</a>
 </div>
 
+<?php if (!$readOnly) { ?>
 <form method="post" action="<?= View::e(View::route('ui.transports.save')) ?>">
     <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($transport['id'] ?? 0) ?>">
@@ -236,31 +238,73 @@ $isNew    = $transport === null;
     </div>
 
     <div class="card">
-        <?php if ($readOnly) { ?>
-            <p class="muted small" style="margin:0">
-                Транспорт заведён администратором и доступен вам только на просмотр:
-                отправлять через него можно, менять настройки — нет.
-            </p>
-        <?php } else { ?>
-            <div class="row">
-                <button class="primary" type="submit">Сохранить</button>
+        <div class="row">
+            <button class="primary" type="submit">Сохранить</button>
 
-                <?php if (!$isNew) { ?>
-                    <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">Отмена</a>
-                    <div class="spacer"></div>
-                <?php } ?>
-            </div>
-        <?php } ?>
+            <?php if (!$isNew) { ?>
+                <a class="btn" href="<?= View::e(View::route('ui.transports')) ?>">Отмена</a>
+                <div class="spacer"></div>
+            <?php } ?>
+        </div>
     </div>
 </form>
+<?php } else { ?>
+    <?php
+    $target = match ($type) {
+        'smtp'     => (string) ($settings['host'] ?? '') . ':' . (string) ($settings['port'] ?? ''),
+        'sendmail' => (string) ($settings['path'] ?? ''),
+        'log'      => (string) ($settings['dir'] ?? ''),
+        'null'     => 'никуда, письма отбрасываются',
+        default    => implode(' → ', (array) ($settings['transports'] ?? [])),
+    };
+    ?>
+    <div class="grid cols-2" style="margin-top:16px">
+        <div class="card">
+            <h2>Основное</h2>
+            <?= View::partial('props', ['rows' => [
+                'Имя'           => $transport['name'] ?? '',
+                'Тип'           => View::transportType($type),
+                'Куда шлёт'     => $target,
+                'Отправитель'   => trim((string) ($transport['from_name'] ?? '') . ' ' . (string) ($transport['from_email'] ?? '')),
+                'Приоритет'     => (int) ($transport['priority'] ?? 100),
+                'Суточный лимит' => (int) ($transport['daily_limit'] ?? 0) ?: 'без ограничений',
+                'Включён'       => (int) ($transport['active'] ?? 0) === 1,
+                'Основной'      => (int) ($transport['is_default'] ?? 0) === 1,
+                'Общий'         => (int) ($transport['shared'] ?? 0) === 1,
+            ]]) ?>
+        </div>
 
-<?php if (!$isNew) { ?>
+        <div class="card">
+            <h2>Отправка</h2>
+            <?php if ($type === 'smtp') { ?>
+                <?= View::partial('props', ['rows' => [
+                    'Шифрование'   => (string) ($settings['encryption'] ?? ''),
+                    'Логин'        => (string) ($settings['username'] ?? ''),
+                    'Пароль'       => ((string) ($settings['password'] ?? '')) !== '' ? 'сохранён' : '',
+                    'Таймаут, с'   => (int) ($settings['timeout'] ?? 30),
+                    'Сессия между письмами' => (bool) ($settings['keepalive'] ?? true),
+                    'Писем в сессии' => (int) ($settings['session_limit'] ?? 100) ?: 'без счёта',
+                ]]) ?>
+            <?php } ?>
+            <?= View::partial('props', ['rows' => [
+                'Всегда со своего адреса' => (bool) ($settings['force_from'] ?? false),
+                'DKIM-подпись'            => (bool) ($dkim['enabled'] ?? false),
+            ]]) ?>
+            <p class="muted small">Транспорт заведён администратором: отправлять через него можно,
+                менять настройки — нет.</p>
+        </div>
+    </div>
+<?php } ?>
+
+<?php if (!$isNew && (View::can(Permission::TRANSPORTS_TEST) || !$readOnly)) { ?>
     <div class="card">
         <div class="row">
-            <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'test'])) ?>">
-                <?= View::csrf() ?>
-                <button type="submit">Проверить подключение</button>
-            </form>
+            <?php if (View::can(Permission::TRANSPORTS_TEST)) { ?>
+                <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'test'])) ?>">
+                    <?= View::csrf() ?>
+                    <button type="submit">Проверить подключение</button>
+                </form>
+            <?php } ?>
             <div class="spacer"></div>
             <?php if (!$readOnly) { ?>
                 <form method="post" action="<?= View::e(View::route('ui.transports.action', ['id' => $transport['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить транспорт?')">

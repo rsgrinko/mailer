@@ -9,13 +9,16 @@ declare(strict_types=1);
  * @var array{items: array<int, array<string, mixed>>, total: int, page: int, pages: int, per_page: int} $result
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 ?>
 <div class="row">
     <h1 style="margin:0">Шаблоны <span class="muted small">всего <?= (int) $result['total'] ?></span></h1>
     <div class="spacer"></div>
-    <a class="btn primary" href="<?= View::e(View::route('ui.templates.new')) ?>">Создать шаблон</a>
+    <?php if (View::can(Permission::TEMPLATES_MANAGE)) { ?>
+        <a class="btn primary" href="<?= View::e(View::route('ui.templates.new')) ?>">Создать шаблон</a>
+    <?php } ?>
 </div>
 
 <div class="card" style="margin-top:16px">

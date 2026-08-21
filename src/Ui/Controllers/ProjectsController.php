@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mailer\Ui\Controllers;
 
+use Mailer\Domain\Permission;
 use Mailer\Domain\Scope;
 use Mailer\Domain\Viewer;
 use Mailer\Http\Request;
@@ -81,6 +82,8 @@ final class ProjectsController extends ResourceController
             'recent'     => $recent,
             // Владельца выбирают только те, кто видит чужие данные: остальным он и так свой
             'owners'     => $viewer->isAdmin() ? $this->users->all() : [],
+            // Без права на правку проект только показываем — полями ввода дразнить незачем
+            'editable'   => $viewer->can(Permission::PROJECTS_MANAGE),
         ], $project === null ? 'Новый проект' : 'Проект «' . $project['name'] . '»'));
     }
 

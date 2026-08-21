@@ -9,6 +9,7 @@ declare(strict_types=1);
  * @var array<int, string> $variables
  * @var array{subject: string, html: string, text: string}|null $preview
  * @var string $sample
+ * @var bool $editable можно ли править: без права templates.manage шаблон только показываем
  */
 
 use Mailer\Domain\Permission;
@@ -22,6 +23,7 @@ $isNew = $template === null;
     <a class="btn" href="<?= View::e(View::route('ui.templates')) ?>">К списку</a>
 </div>
 
+<?php if ($editable) { ?>
 <form method="post" action="<?= View::e(View::route('ui.templates.save')) ?>">
     <?= View::csrf() ?>
     <input type="hidden" name="id" value="<?= (int) ($template['id'] ?? 0) ?>">
@@ -65,6 +67,29 @@ $isNew = $template === null;
         </div>
     </div>
 </form>
+<?php } else { ?>
+    <div class="card" style="margin-top:16px">
+        <?= View::partial('props', ['rows' => [
+            'Имя'         => $template['name'] ?? '',
+            'Описание'    => $template['description'] ?? '',
+            'Тема'        => $template['subject'] ?? '',
+            'Переменные'  => implode(', ', $variables),
+        ]]) ?>
+
+        <?php if ((string) ($template['html'] ?? '') !== '') { ?>
+            <div class="small muted" style="margin-top:12px">HTML-версия</div>
+            <pre><?= View::e((string) $template['html']) ?></pre>
+        <?php } ?>
+
+        <?php if ((string) ($template['text'] ?? '') !== '') { ?>
+            <div class="small muted" style="margin-top:12px">Текстовая версия</div>
+            <pre><?= View::e((string) $template['text']) ?></pre>
+        <?php } ?>
+
+        <p class="muted small">Шаблон доступен вам только на просмотр: права на правку
+            (<span class="mono">templates.manage</span>) у роли нет.</p>
+    </div>
+<?php } ?>
 
 <?php if (!$isNew) { ?>
     <div class="card">
@@ -116,10 +141,12 @@ $isNew = $template === null;
         </div>
     <?php } ?>
 
-    <div class="card">
-        <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить шаблон?')">
-            <?= View::csrf() ?>
-            <button class="danger" type="submit">Удалить шаблон</button>
-        </form>
-    </div>
+    <?php if ($editable) { ?>
+        <div class="card">
+            <form method="post" action="<?= View::e(View::route('ui.templates.action', ['id' => $template['id'], 'action' => 'delete'])) ?>" onsubmit="return confirm('Удалить шаблон?')">
+                <?= View::csrf() ?>
+                <button class="danger" type="submit">Удалить шаблон</button>
+            </form>
+        </div>
+    <?php } ?>
 <?php } ?>

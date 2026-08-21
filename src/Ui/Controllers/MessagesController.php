@@ -260,6 +260,12 @@ final class MessagesController
      */
     public function bulk(Request $request, Scope $scope): Response
     {
+        if (!(bool) Config::get('ui.allow_actions', true)) {
+            View::flash('Действия из панели отключены настройкой UI_ALLOW_ACTIONS', 'error');
+
+            return Response::redirect(View::route('ui.messages'));
+        }
+
         $action = (string) $request->input('action', '');
         $status = (string) $request->input('status', MessageRepository::FAILED);
         $count  = 0;

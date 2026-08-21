@@ -11,16 +11,19 @@ declare(strict_types=1);
  * @var array<string, string> $filters
  */
 
+use Mailer\Domain\Permission;
 use Mailer\Support\Str;
 use Mailer\Ui\View;
 ?>
 <div class="row">
     <h1 style="margin:0">Вебхуки</h1>
     <div class="spacer"></div>
-    <form method="post" action="<?= View::e(View::route('ui.webhooks.process')) ?>">
-        <?= View::csrf() ?>
-        <button class="primary" type="submit">Разослать сейчас</button>
-    </form>
+    <?php if (View::can(Permission::WEBHOOKS_MANAGE)) { ?>
+        <form method="post" action="<?= View::e(View::route('ui.webhooks.process')) ?>">
+            <?= View::csrf() ?>
+            <button class="primary" type="submit">Разослать сейчас</button>
+        </form>
+    <?php } ?>
 </div>
 
 <div class="card" style="margin-top:16px">
@@ -76,17 +79,19 @@ use Mailer\Ui\View;
                     <td class="small"><?= View::e(Str::limit((string) ($item['last_error'] ?? ''), 40)) ?></td>
                     <td class="nowrap">
                         <div class="row">
-                            <?php if ($item['message_id'] !== null) { ?>
+                            <?php if ($item['message_id'] !== null && View::can(Permission::MESSAGES_VIEW)) { ?>
                                 <a href="<?= View::e(View::route('ui.messages.show', ['id' => $item['message_id']])) ?>">письмо</a>
                             <?php } ?>
-                            <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'send'])) ?>">
-                                <?= View::csrf() ?>
-                                <button type="submit">отправить</button>
-                            </form>
-                            <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'delete'])) ?>">
-                                <?= View::csrf() ?>
-                                <button class="danger" type="submit">удалить</button>
-                            </form>
+                            <?php if (View::can(Permission::WEBHOOKS_MANAGE)) { ?>
+                                <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'send'])) ?>">
+                                    <?= View::csrf() ?>
+                                    <button type="submit">отправить</button>
+                                </form>
+                                <form method="post" action="<?= View::e(View::route('ui.webhooks.action', ['id' => $item['id'], 'action' => 'delete'])) ?>">
+                                    <?= View::csrf() ?>
+                                    <button class="danger" type="submit">удалить</button>
+                                </form>
+                            <?php } ?>
                         </div>
                         <details>
                             <summary class="muted small">данные</summary>

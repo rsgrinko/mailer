@@ -72,8 +72,9 @@ final class TransportsController extends ResourceController
             'owners'    => $viewer->isAdmin() ? $this->users->all() : [],
             // Общий транспорт и основной по умолчанию — дело администратора
             'canShare'  => $viewer->isAdmin(),
-            // Чужой или общий транспорт показываем только на просмотр
-            'readOnly'  => $transport !== null && !$this->editable($transport, $viewer),
+            // Только на просмотр: чужой (общий) транспорт или роль без права на правку
+            'readOnly'  => $transport !== null
+                && (!$viewer->can(Permission::TRANSPORTS_MANAGE) || !$this->editable($transport, $viewer)),
         ], $transport === null ? 'Новый транспорт' : 'Транспорт «' . $transport['name'] . '»'));
     }
 
