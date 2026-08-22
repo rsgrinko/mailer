@@ -15,6 +15,9 @@ final class Response
     /** @var array<string, string> */
     private array $headers;
 
+    /** @var array<int, string> Готовые значения Set-Cookie: их может быть несколько */
+    private array $cookies = [];
+
     /**
      * @param array<string, string> $headers
      */
@@ -90,6 +93,28 @@ final class Response
     }
 
     /**
+     * Кука в ответ. Отдельно от заголовков: кук в одном ответе бывает несколько
+     * (долгая «запомнить меня» и токен форм), а в карте заголовков вторая
+     * затёрла бы первую.
+     */
+    public function withCookie(string $cookie): self
+    {
+        $this->cookies[] = $cookie;
+
+        return $this;
+    }
+
+    /**
+     * Куки ответа — нужны проверкам.
+     *
+     * @return array<int, string>
+     */
+    public function cookies(): array
+    {
+        return $this->cookies;
+    }
+
+    /**
      * Заголовки ответа — нужны проверкам: куда именно ведёт перенаправление.
      *
      * @return array<string, string>
@@ -118,6 +143,13 @@ final class Response
 
         foreach ($this->headers as $name => $value) {
             header($name . ': ' . $value);
+        }
+
+        // Куки добавляем, а не заменяем: PHP кладёт в Set-Cookie куку сессии, и
+        // header() со значением по умолчанию (replace = true) её выбрасывал —
+        // сессия не держалась, а вместе с ней терялся токен форм
+        foreach ($this->cookies as $cookie) {
+            header('Set-Cookie: ' . $cookie, false);
         }
 
         echo $this->body;

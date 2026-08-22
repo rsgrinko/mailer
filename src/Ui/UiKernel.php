@@ -38,14 +38,12 @@ final class UiKernel
     public function handle(Request $request): Response
     {
         try {
-            // Куку «запомнить меня» навешиваем здесь: её ставит и снимает Auth, а
-            // заголовки есть только у ответа. Одно место — про неё нельзя забыть
-            return Auth::applyCookies($this->router()->dispatch($request));
+            return $this->withCookies($this->router()->dispatch($request));
         } catch (RecordNotFound $e) {
             // Записи нет — говорим об этом и возвращаем в список раздела
             View::flash($e->getMessage(), 'error');
 
-            return Auth::applyCookies(Response::redirect(View::route($e->route())));
+            return $this->withCookies(Response::redirect(View::route($e->route())));
         } catch (Throwable $e) {
             // По этому коду ошибку находят в логе: пользователю текст исключения показывать нечего
             $code = strtoupper(bin2hex(random_bytes(3)));
@@ -62,11 +60,21 @@ final class UiKernel
                 ? $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ')'
                 : 'Внутренняя ошибка сервиса. Подробности в логе, код ошибки: ' . $code;
 
-            return Auth::applyCookies(Response::html(
+            return $this->withCookies(Response::html(
                 View::render('error', ['message' => $details], 'Ошибка'),
                 500
             ));
         }
+    }
+
+    /**
+     * Куки панели навешиваются здесь: их ставит и снимает Auth (долгая «запомнить
+     * меня») и Csrf (токен форм), а заголовки есть только у ответа. Одно место на
+     * все ветки, включая страницу ошибки, — про куку нельзя забыть.
+     */
+    private function withCookies(Response $response): Response
+    {
+        return Csrf::applyCookie(Auth::applyCookies($response));
     }
 
     /**

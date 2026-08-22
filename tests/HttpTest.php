@@ -42,6 +42,24 @@ function httpRequest(string $method, string $path, array $headers = [], array $b
 }
 
 /**
+ * Значение куки из ответа — так же, как его запомнил бы браузер.
+ */
+function responseCookie(Mailer\Http\Response $response, string $name): string
+{
+    foreach ($response->cookies() as $cookie) {
+        if (!str_starts_with($cookie, $name . '=')) {
+            continue;
+        }
+
+        $value = substr($cookie, strlen($name) + 1);
+
+        return rawurldecode(substr($value, 0, (int) strpos($value . ';', ';')));
+    }
+
+    return '';
+}
+
+/**
  * Данные, на которых гоняем страницы: проект с ключом, транспорт, шаблон, пользователь, письмо.
  *
  * @return array<string, mixed>

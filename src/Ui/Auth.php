@@ -64,6 +64,15 @@ final class Auth
             return;
         }
 
+        // Сборщик мусора PHP по умолчанию выбрасывает сессию через 24 минуты, а
+        // панель обещает UI_SESSION_LIFETIME: без этого человека выкидывало сильно
+        // раньше обещанного
+        $lifetime = (int) Config::get('ui.session_lifetime', 43200);
+
+        if ($lifetime > (int) ini_get('session.gc_maxlifetime')) {
+            @ini_set('session.gc_maxlifetime', (string) $lifetime);
+        }
+
         session_name('mailer_panel');
         session_set_cookie_params([
             'lifetime' => 0,
@@ -204,16 +213,22 @@ final class Auth
 
         self::forgetRememberCookie();
         self::clearSession();
+
+        // Токен форм выдаём новый: человек вышел, старый пригодиться не должен
+        Csrf::rotate();
     }
 
     /**
      * Закрывает сессию, не трогая долгую куку: этим отличается «сессия протухла»
      * от «человек нажал выйти».
+     *
+     * Токен форм здесь не меняем: сессию мог унести сборщик мусора PHP, а человек
+     * при этом остаётся в панели по долгой куке — и открытая у него страница должна
+     * отправляться. При настоящем выходе и при входе токен меняет Csrf::rotate().
      */
     private static function clearSession(): void
     {
         unset($_SESSION[self::SESSION_KEY]);
-        Csrf::rotate();
         self::$cached = null;
 
         if (session_status() === PHP_SESSION_ACTIVE) {
@@ -287,7 +302,7 @@ final class Auth
             $parts[] = 'Secure';
         }
 
-        return $response->withHeader('Set-Cookie', implode('; ', $parts));
+        return $response->withCookie(implode('; ', $parts));
     }
 
     /**
@@ -372,7 +387,11 @@ final class Auth
         return 'login:' . $ip;
     }
 
-    private static function isHttps(): bool
+    /**
+     * Соединение защищено — куки помечаем Secure. Публичный, потому что тем же
+     * признаком пользуется кука токена форм (Csrf).
+     */
+    public static function isHttps(): bool
     {
         if (($_SERVER['HTTPS'] ?? '') !== '' && strtolower((string) $_SERVER['HTTPS']) !== 'off') {
             return true;

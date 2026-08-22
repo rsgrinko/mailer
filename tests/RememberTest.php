@@ -56,8 +56,12 @@ function rememberUser(): array
 function rememberReset(): void
 {
     $_SESSION = [];
-    unset($_COOKIE[Auth::REMEMBER_COOKIE]);
+    unset($_COOKIE[Auth::REMEMBER_COOKIE], $_COOKIE[Csrf::COOKIE]);
     Auth::forget();
+
+    // Токен формы в CLI живёт статикой: не сбросишь — «сессия кончилась» будет
+    // ненастоящей, и проверки пройдут там, где браузер получил бы «форма устарела»
+    Csrf::forget();
 }
 
 /**
@@ -78,11 +82,25 @@ function rememberLogin(bool $remember): Mailer\Http\Response
 }
 
 /**
- * Достаёт значение нашей куки из заголовка ответа.
+ * Заголовок нашей куки среди кук ответа: там же лежит кука токена форм.
+ */
+function rememberCookieHeader(Mailer\Http\Response $response): string
+{
+    foreach ($response->cookies() as $cookie) {
+        if (str_starts_with($cookie, Auth::REMEMBER_COOKIE . '=')) {
+            return $cookie;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Достаёт значение нашей куки из ответа.
  */
 function rememberCookieValue(Mailer\Http\Response $response): string
 {
-    $header = (string) ($response->headers()['Set-Cookie'] ?? '');
+    $header = rememberCookieHeader($response);
 
     if (!str_starts_with($header, Auth::REMEMBER_COOKIE . '=')) {
         return '';
@@ -117,7 +135,7 @@ test('с галкой ставится кука и заводится токен
         assertTrue($cookie !== '', 'кука должна прийти в ответе');
         assertMatches('/^[0-9a-f]{16}:[0-9a-f]{64}$/', $cookie, 'кука — это selector:validator');
 
-        $header = (string) $response->headers()['Set-Cookie'];
+        $header = rememberCookieHeader($response);
         assertContains('HttpOnly', $header, 'куку не должен читать скрипт на странице');
         assertContains('SameSite=Lax', $header);
         assertContains('Max-Age=', $header, 'кука должна пережить закрытие браузера');
@@ -256,7 +274,7 @@ test('выход гасит токен и просит браузер забыт
         );
 
         assertSame(302, $response->status());
-        assertContains('Max-Age=0', (string) $response->headers()['Set-Cookie'], 'куку надо погасить');
+        assertContains('Max-Age=0', rememberCookieHeader($response), 'куку надо погасить');
         assertSame(0, (new RememberTokenRepository())->countForUser((int) $user['id']), 'токен должен исчезнуть');
 
         rememberReset();
@@ -373,16 +391,25 @@ test('протухшая сессия не выбрасывает того, ко
 });
 
 test('форма, открытая до тихого входа, всё равно отправляется', function (): void {
-    withConfig(['ui.auth' => true], static function (): void {
+    // Ключ свой: куку токена подписывают им, а в CI никакого .env нет
+    withConfig(['ui.auth' => true, 'app.key' => CSRF_TEST_KEY], static function (): void {
         rememberUser();
-        $cookie = rememberCookieValue(rememberLogin(true));
 
-        // Страница открыта, токен формы получен
+        $login  = rememberLogin(true);
+        $cookie = rememberCookieValue($login);
+
+        // Страница открыта: браузер запомнил токен формы и его куку. Куку выдаёт
+        // тот ответ, в котором токен появился, — на входе или уже на странице
+        $page  = (new UiKernel())->handle(httpRequest('GET', '/ui/suppressions'));
         $token = Csrf::token();
+        $form  = responseCookie($page, Csrf::COOKIE) ?: responseCookie($login, Csrf::COOKIE);
 
-        // Пока страница висела, сессия кончилась, а кука осталась
+        assertTrue($form !== '', 'токен формы должен уехать в куку');
+
+        // Пока страница висела, сессия кончилась, а куки остались
         rememberReset();
         $_COOKIE[Auth::REMEMBER_COOKIE] = $cookie;
+        $_COOKIE[Csrf::COOKIE]          = $form;
 
         // Человек жмёт кнопку на той самой странице: приходит старый токен
         $response = (new UiKernel())->handle(
